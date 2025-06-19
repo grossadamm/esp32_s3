@@ -1,0 +1,29 @@
+{
+  "name": "mcp-voice-agent",
+  "version": "1.0.0",
+  "description": "Voice-controlled AI agent with MCP tool integration",
+  "private": true,
+  "workspaces": [
+    "voice-agent",
+    "mcp-servers/*"
+  ],
+  "scripts": {
+    "build": "npm run build --workspaces",
+    "dev": "npm run dev --workspace=voice-agent",
+    "test": "npm run test --workspaces",
+    "clean": "npm run clean --workspaces",
+    "start:voice": "npm run start --workspace=voice-agent",
+    "start:finance-mcp": "npm run start --workspace=mcp-servers/finance-mcp",
+    "start:voice-mcp": "npm run start --workspace=mcp-servers/voice-mcp",
+    "dev:finance-mcp": "npm run dev --workspace=mcp-servers/finance-mcp",
+    "dev:voice-mcp": "npm run dev --workspace=mcp-servers/voice-mcp",
+    "sync:monarch": "tsx voice-agent/src/services/finance/MonarchSync.ts"
+  },
+  "keywords": ["mcp", "voice", "ai", "agent", "tools", "finance"],
+  "author": "agross",
+  "license": "MIT",
+  "devDependencies": {
+    "typescript": "^5.3.0",
+    "tsx": "^4.6.0"
+  }
+} 

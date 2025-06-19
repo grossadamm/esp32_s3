@@ -35,6 +35,9 @@ mcp-voice-agent/
 │   └── dev-tools-mcp/              # Development tools (future)
 ├── data/
 │   └── finance.db                  # SQLite database with financial data
+├── docker-compose.yml              # Docker Compose configuration
+├── Dockerfile                      # Docker container definition
+├── ecosystem.config.js             # PM2 process management
 ├── mcp-config.json                 # MCP server registry
 └── package.json                    # Root monorepo configuration
 ```
@@ -65,13 +68,41 @@ mcp-voice-agent/
 ## Quick Start
 
 ### Prerequisites
-- Node.js 18+
-- npm 9+
+- Docker and Docker Compose (recommended)
+- OR Node.js 18+ and npm 9+ (for local development)
 - OpenAI API key
 - Anthropic API key (optional)
 - Monarch Money token (optional, for data sync)
 
-### Installation
+### Docker Setup (Recommended)
+
+The application uses Docker with PM2 for process management, running all services in a single container:
+
+```bash
+# Clone the repository
+git clone <repo-url>
+cd mcp-voice-agent
+
+# Set up environment variables
+cp .env.example .env
+# Edit .env with your API keys (see Environment Variables section below)
+
+# Build and start with Docker Compose
+docker compose up --build
+
+# Or run in detached mode
+docker compose up -d --build
+```
+
+**Services Running in Container:**
+- **Voice Agent**: Main API server (port 3000, exposed)
+- **Finance MCP Server**: MCP protocol server (internal)
+- **Voice MCP Server**: Voice processing server (internal)  
+- **Finance HTTP Server**: Direct API access (port 3003, internal)
+
+**Security**: Only the main voice agent port (3000) is exposed externally. All MCP servers run internally for security.
+
+### Local Development Setup
 
 ```bash
 # Clone and install dependencies
@@ -92,19 +123,44 @@ Create a `.env` file in the root directory:
 # Required for voice processing
 OPENAI_API_KEY=your_openai_api_key_here
 
+# LLM Provider (default: openai)
+LLM_PROVIDER=openai  # or 'claude'
+
 # Optional - Claude support  
 ANTHROPIC_API_KEY=your_anthropic_api_key_here
-LLM_PROVIDER=claude  # or 'openai'
 
 # Optional - Monarch Money sync
 MONARCH_TOKEN=your_monarch_token_here
 
-# Server configuration
-PORT=3001
-FINANCE_MCP_URL=http://localhost:3000
+# Server configuration (Docker uses these ports internally)
+PORT=3000                    # Voice agent port
+FINANCE_HTTP_PORT=3003      # Finance HTTP server port
+FINANCE_MCP_URL=http://localhost:3003
 ```
 
-### Development
+### Docker Commands
+
+```bash
+# Build and start all services
+docker compose up --build
+
+# Start in background
+docker compose up -d --build
+
+# View logs
+docker compose logs -f
+
+# Access container shell
+docker compose exec mcp-voice-agent /bin/bash
+
+# Stop services
+docker compose down
+
+# Rebuild after code changes
+docker compose down && docker compose up --build
+```
+
+### Local Development (Without Docker)
 
 ```bash
 # Start voice agent in development mode
@@ -139,7 +195,7 @@ npm run start:voice-mcp
 
 ## API Endpoints
 
-### Voice Agent Server (Port 3001)
+### Voice Agent Server (Port 3000)
 
 #### POST /api/audio
 Upload audio file for voice processing.
@@ -179,7 +235,7 @@ Process text input directly.
 #### GET /health
 Health check endpoint.
 
-### Finance HTTP Server (Port 3000)
+### Finance HTTP Server (Port 3003, Internal)
 
 Direct REST API access to financial data with read-only security.
 
@@ -233,7 +289,92 @@ Get database schema information.
 #### GET /health
 Health check endpoint.
 
+## Testing
+
+### Docker-based Testing (Recommended)
+
+```bash
+# Start the services
+docker compose up -d --build
+
+# Test with audio file
+curl -X POST \
+  -F "audio=@voice-agent/tests/audio/house-affordability.wav" \
+  http://localhost:3000/api/audio
+
+# Test with text
+curl -X POST \
+  -H "Content-Type: application/json" \
+  -d '{"text": "What are my monthly expenses?"}' \
+  http://localhost:3000/api/text
+
+# Health check
+curl http://localhost:3000/health
+```
+
+### Local Testing
+
+```bash
+# Run all tests
+npm test
+
+# Run audio endpoint tests  
+npm run test:audio --workspace=voice-agent
+
+# Generate test audio files
+npm run generate:audio --workspace=voice-agent
+
+# Test HTTP API endpoints directly
+curl http://localhost:3003/api/accounts
+curl -X POST -H "Content-Type: application/json" \
+  -d '{"query": "SELECT COUNT(*) FROM transactions"}' \
+  http://localhost:3003/api/query
+```
+
+### Sample Audio Test
+
+The repository includes test audio files for validation:
+
+```bash
+# Test house affordability query
+curl -X POST \
+  -F "audio=@voice-agent/tests/audio/house-affordability.wav" \
+  http://localhost:3000/api/audio
+
+# Expected: Comprehensive house affordability analysis with real financial data
+```
+
+## Process Management
+
+The Docker setup uses PM2 to manage multiple Node.js processes in a single container:
+
+**PM2 Configuration** (`ecosystem.config.js`):
+- **voice-agent**: Main API server (port 3000)
+- **finance-mcp**: MCP protocol server  
+- **voice-mcp**: Voice processing server
+- **finance-http**: HTTP API server (port 3003)
+
+**PM2 Commands in Container:**
+```bash
+# View process status
+docker compose exec mcp-voice-agent pm2 status
+
+# View logs
+docker compose exec mcp-voice-agent pm2 logs
+
+# Restart specific service
+docker compose exec mcp-voice-agent pm2 restart voice-agent
+
+# Monitor processes
+docker compose exec mcp-voice-agent pm2 monit
+```
+
 ## Security Features
+
+### Container Security
+- **Port Isolation**: Only main voice agent (port 3000) exposed externally
+- **Internal Communication**: MCP servers accessible only within container
+- **Process Isolation**: PM2 manages separate processes for each service
 
 ### Read-Only Database Access
 The HTTP server uses `SQLITE_OPEN_READONLY` mode to prevent any write operations:
@@ -252,7 +393,10 @@ The HTTP server uses `SQLITE_OPEN_READONLY` mode to prevent any write operations
 Import live financial data from Monarch Money:
 
 ```bash
-# Set your Monarch token and run sync
+# Docker environment
+docker compose exec mcp-voice-agent sh -c "cd mcp-servers/finance-mcp && MONARCH_TOKEN=your_token npx tsx src/MonarchSync.ts"
+
+# Local environment  
 cd mcp-servers/finance-mcp
 MONARCH_TOKEN=your_token npx tsx src/MonarchSync.ts
 ```

@@ -14,51 +14,64 @@ export class MCPClient {
   private baseUrl: string;
 
   constructor() {
-    this.baseUrl = process.env.FINANCE_MCP_URL || 'http://localhost:3000';
+    this.baseUrl = process.env.FINANCE_MCP_URL || 'http://localhost:3003';
   }
 
   async getAvailableTools(): Promise<Tool[]> {
     try {
+      // Return tools that match the actual finance HTTP server capabilities
       return [
         {
           name: 'query_finance_database',
-          description: 'Execute SQL queries on the finance database to get account balances, transactions, spending analysis, etc.',
+          description: 'Execute SQL queries on the finance database. Can query transactions, accounts, stock_options, stock_prices, and sp500_prices tables.',
           input_schema: {
             type: 'object',
             properties: {
               query: {
                 type: 'string',
-                description: 'SQL query to execute'
+                description: 'SQL query to execute (SELECT statements only for safety)',
               },
               params: {
                 type: 'array',
                 items: { type: 'string' },
-                description: 'Optional parameters for parameterized queries'
-              }
+                description: 'Optional parameters for parameterized queries',
+                default: [],
+              },
             },
-            required: ['query']
-          }
+            required: ['query'],
+          },
         },
         {
-          name: 'get_database_schema',
-          description: 'Get information about available database tables and their structure',
+          name: 'describe_database_schema',
+          description: 'Get information about available database tables and their schemas',
           input_schema: {
             type: 'object',
             properties: {
               table_name: {
                 type: 'string',
-                description: 'Optional: specific table name to describe'
-              }
-            }
-          }
+                description: 'Optional: specific table name to describe. If omitted, lists all tables.',
+              },
+            },
+            required: [],
+          },
+        },
+        {
+          name: 'get_stock_options',
+          description: 'Get comprehensive stock options portfolio analysis including expiring grants and total value',
+          input_schema: {
+            type: 'object',
+            properties: {},
+            required: [],
+          },
         },
         {
           name: 'get_account_balances',
           description: 'Get all account balances and total net worth',
           input_schema: {
             type: 'object',
-            properties: {}
-          }
+            properties: {},
+            required: [],
+          },
         },
         {
           name: 'get_monthly_spending',
@@ -71,8 +84,9 @@ export class MCPClient {
                 description: 'Number of months to analyze (default: 1)',
                 default: 1
               }
-            }
-          }
+            },
+            required: [],
+          },
         },
         {
           name: 'get_recent_transactions',
@@ -90,65 +104,9 @@ export class MCPClient {
                 description: 'Maximum number of transactions to return (default: 20)',
                 default: 20
               }
-            }
-          }
-        },
-        {
-          name: 'get_large_expenses',
-          description: 'Get large expenses above a threshold for analysis',
-          input_schema: {
-            type: 'object',
-            properties: {
-              threshold: {
-                type: 'number',
-                description: 'Minimum expense amount to include (default: 100)',
-                default: 100
-              },
-              days: {
-                type: 'number',
-                description: 'Number of days to look back (default: 30)',
-                default: 30
-              }
-            }
-          }
-        },
-        {
-          name: 'get_cash_flow',
-          description: 'Get income vs expenses analysis for specified period',
-          input_schema: {
-            type: 'object',
-            properties: {
-              days: {
-                type: 'number',
-                description: 'Number of days to analyze (default: 30)',
-                default: 30
-              }
-            }
-          }
-        },
-        {
-          name: 'get_stock_options',
-          description: 'Get comprehensive stock options portfolio analysis including expiring grants',
-          input_schema: {
-            type: 'object',
-            properties: {}
-          }
-        },
-        {
-          name: 'get_retirement_analysis',
-          description: 'Get comprehensive tax-aware retirement analysis including scenarios and recommendations',
-          input_schema: {
-            type: 'object',
-            properties: {}
-          }
-        },
-        {
-          name: 'house_affordability_analysis',
-          description: 'Get comprehensive house affordability analysis based on current financial situation',
-          input_schema: {
-            type: 'object',
-            properties: {}
-          }
+            },
+            required: [],
+          },
         }
       ];
     } catch (error) {
@@ -167,7 +125,7 @@ export class MCPClient {
           });
           return queryResponse.data;
         
-        case 'get_database_schema':
+        case 'describe_database_schema':
           const schemaUrl = params.table_name 
             ? `${this.baseUrl}/api/schema/${params.table_name}`
             : `${this.baseUrl}/api/schema`;
@@ -193,32 +151,9 @@ export class MCPClient {
           });
           return transactionsResponse.data;
         
-        case 'get_large_expenses':
-          const expensesResponse = await axios.get(`${this.baseUrl}/api/large-expenses`, {
-            params: { 
-              threshold: params.threshold || 100,
-              days: params.days || 30
-            }
-          });
-          return expensesResponse.data;
-        
-        case 'get_cash_flow':
-          const cashFlowResponse = await axios.get(`${this.baseUrl}/api/cash-flow`, {
-            params: { days: params.days || 30 }
-          });
-          return cashFlowResponse.data;
-        
         case 'get_stock_options':
           const optionsResponse = await axios.get(`${this.baseUrl}/api/options`);
           return optionsResponse.data;
-        
-        case 'get_retirement_analysis':
-          const retirementResponse = await axios.get(`${this.baseUrl}/api/retirement`);
-          return retirementResponse.data;
-        
-        case 'house_affordability_analysis':
-          const affordabilityResponse = await axios.get(`${this.baseUrl}/api/house-affordability`);
-          return affordabilityResponse.data;
         
         default:
           throw new Error(`Unknown tool: ${name}`);
@@ -227,5 +162,9 @@ export class MCPClient {
       console.error(`Failed to execute tool ${name}:`, error);
       throw error;
     }
+  }
+
+  async close(): Promise<void> {
+    // Nothing to clean up for HTTP client
   }
 } 

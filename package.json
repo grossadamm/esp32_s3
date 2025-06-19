@@ -17,7 +17,13 @@
     "start:voice-mcp": "npm run start --workspace=mcp-servers/voice-mcp",
     "dev:finance-mcp": "npm run dev --workspace=mcp-servers/finance-mcp",
     "dev:finance-http": "npm run dev:http --workspace=mcp-servers/finance-mcp",
-    "dev:voice-mcp": "npm run dev --workspace=mcp-servers/voice-mcp"
+    "dev:voice-mcp": "npm run dev --workspace=mcp-servers/voice-mcp",
+    "docker:build": "docker compose build",
+    "docker:up": "docker compose up -d",
+    "docker:down": "docker compose down",
+    "docker:logs": "docker compose logs -f",
+    "docker:dev": "./scripts/docker-dev.sh",
+    "docker:status": "./scripts/pm2-status.sh"
   },
   "keywords": ["mcp", "voice", "ai", "agent", "tools", "finance"],
   "author": "agross",

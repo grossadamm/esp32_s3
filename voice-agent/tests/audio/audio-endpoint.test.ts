@@ -5,7 +5,7 @@ import FormData from 'form-data';
 import axios from 'axios';
 
 describe('Audio Endpoint Tests', () => {
-  const baseUrl = 'http://localhost:3001';
+  const baseUrl = 'http://localhost:3000';
   const testAudioDir = path.join(__dirname, '../audio');
   
   const testQuestions = [

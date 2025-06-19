@@ -1,0 +1,24 @@
+services:
+  mcp-voice-agent:
+    build: .
+    ports:
+      - "3000:3000"  # Voice Agent (main entry point)
+    environment:
+      - NODE_ENV=production
+      - LLM_PROVIDER=openai
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+    volumes:
+      - ./data:/app/data
+      - ./logs:/app/logs
+      - ./uploads:/app/voice-agent/uploads
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+volumes:
+  logs:
+  uploads: 

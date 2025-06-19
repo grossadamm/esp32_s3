@@ -107,7 +107,7 @@ class StockPriceImporter {
     
     try {
       const response = await fetch(url);
-      const data = await response.json();
+      const data = await response.json() as any;
       
       if (data['Error Message']) {
         throw new Error(`API Error: ${data['Error Message']}`);

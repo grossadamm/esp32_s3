@@ -255,7 +255,7 @@ class FinanceMonarchSync {
 
   constructor() {
     // Update database path for monorepo structure
-    const dbPath = path.join(process.cwd(), '..', '..', 'data', 'finance.db');
+    const dbPath = path.join(process.cwd(), 'data', 'finance.db');
     this.db = new DatabaseWrapper(dbPath);
     this.monarch = new MonarchAPI();
     this.initializeDatabase();
@@ -430,6 +430,29 @@ class FinanceMonarchSync {
   public close(): void {
     this.db.close();
   }
+}
+
+// CLI usage
+async function main() {
+  try {
+    const sync = new FinanceMonarchSync();
+    
+    process.on('SIGINT', () => {
+      console.log('\n🛑 Shutting down...');
+      sync.close();
+      process.exit(0);
+    });
+
+    await sync.fullSync();
+    sync.close();
+  } catch (error) {
+    console.error('💥 Fatal error:', error);
+    process.exit(1);
+  }
+}
+
+if (import.meta.url === `file://${process.argv[1]}`) {
+  main();
 }
 
 export { MonarchAPI, FinanceMonarchSync }; 

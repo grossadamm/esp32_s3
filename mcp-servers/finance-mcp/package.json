@@ -7,7 +7,9 @@
   "scripts": {
     "build": "tsc",
     "dev": "tsx watch src/index.ts",
+    "dev:http": "node src/http-server.js",
     "start": "node dist/index.js",
+    "start:http": "node src/http-server.js",
     "clean": "rm -rf dist"
   },
   "dependencies": {

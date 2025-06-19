@@ -16,8 +16,8 @@
     "start:finance-mcp": "npm run start --workspace=mcp-servers/finance-mcp",
     "start:voice-mcp": "npm run start --workspace=mcp-servers/voice-mcp",
     "dev:finance-mcp": "npm run dev --workspace=mcp-servers/finance-mcp",
-    "dev:voice-mcp": "npm run dev --workspace=mcp-servers/voice-mcp",
-    "sync:monarch": "tsx voice-agent/src/services/finance/MonarchSync.ts"
+    "dev:finance-http": "npm run dev:http --workspace=mcp-servers/finance-mcp",
+    "dev:voice-mcp": "npm run dev --workspace=mcp-servers/voice-mcp"
   },
   "keywords": ["mcp", "voice", "ai", "agent", "tools", "finance"],
   "author": "agross",

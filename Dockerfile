@@ -10,7 +10,6 @@ WORKDIR /app
 COPY package*.json ./
 COPY voice-agent/package*.json ./voice-agent/
 COPY mcp-servers/finance-mcp/package*.json ./mcp-servers/finance-mcp/
-COPY mcp-servers/voice-mcp/package*.json ./mcp-servers/voice-mcp/
 
 # Install all dependencies (keep devDependencies for tsx)
 RUN npm ci

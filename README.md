@@ -29,7 +29,7 @@ mcp-voice-agent/
 │   │   │   ├── analysis/           # Financial analysis modules
 │   │   │   └── importers/          # Data import utilities
 │   │   └── package.json
-│   ├── voice-mcp/                  # Voice processing tools
+│   ├── dev-tools-mcp/              # Development tools (future)
 │   │   ├── src/index.ts
 │   │   └── package.json
 │   └── dev-tools-mcp/              # Development tools (future)
@@ -61,11 +61,6 @@ mcp-voice-agent/
 - **Schema Inspection**: Database table and column information
 - **House Affordability Analysis**: Comprehensive affordability calculations
 - **Account Management**: Balance and transaction analysis
-
-### Voice MCP Server  
-- **Speech Command Processing**: Intent recognition from voice commands
-- **Response Generation**: Speech-friendly text formatting
-- **Context Awareness**: Command interpretation with context
 
 ## Quick Start
 
@@ -99,7 +94,6 @@ docker compose up -d --build
 **Services Running in Container:**
 - **Voice Agent**: Main API server (port 3000, exposed)
 - **Finance MCP Server**: MCP protocol server (internal)
-- **Voice MCP Server**: Voice processing server (internal)  
 - **Finance HTTP Server**: Direct API access (port 3003, internal)
 
 **Security**: Only the main voice agent port (3000) is exposed externally. All MCP servers run internally for security.
@@ -174,10 +168,7 @@ npm run dev:finance-mcp
 # Start finance HTTP server (direct API access)
 cd mcp-servers/finance-mcp && npm run start:http
 
-# Start voice MCP server  
-npm run dev:voice-mcp
-
-# Sync financial data from Monarch Money
+  # Sync financial data from Monarch Money
 cd mcp-servers/finance-mcp && MONARCH_TOKEN=your_token npx tsx src/MonarchSync.ts
 ```
 
@@ -190,10 +181,9 @@ npm run build
 # Start voice agent
 npm run start:voice
 
-# Start MCP servers
-npm run start:finance-mcp
-npm run start:voice-mcp
-```
+  # Start MCP servers
+  npm run start:finance-mcp
+  ```
 
 ## API Endpoints
 
@@ -389,8 +379,6 @@ The Docker setup uses PM2 to manage multiple Node.js processes in a single conta
 
 **PM2 Configuration** (`ecosystem.config.js`):
 - **voice-agent**: Main API server (port 3000)
-- **finance-mcp**: MCP protocol server  
-- **voice-mcp**: Voice processing server
 - **finance-http**: HTTP API server (port 3003)
 
 **PM2 Commands in Container:**
@@ -474,17 +462,7 @@ Sync latest data from Monarch Money.
 - Input: `{ token?: string }`
 - Returns: Sync results and statistics
 
-### Voice MCP Tools
 
-#### process_speech_command
-Process and categorize voice commands.
-- Input: `{ text: string, context?: string }`
-- Returns: Command type and parameters
-
-#### generate_speech_response
-Convert text to speech-friendly format.
-- Input: `{ message: string, tone?: string }`
-- Returns: Natural language response
 
 ## Database Schema
 

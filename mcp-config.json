@@ -7,13 +7,6 @@
         "NODE_ENV": "production"
       }
     },
-    "voice-mcp": {
-      "command": "node", 
-      "args": ["./mcp-servers/voice-mcp/dist/index.js"],
-      "env": {
-        "NODE_ENV": "production"
-      }
-    },
     "dev-tools-mcp": {
       "command": "node",
       "args": ["./mcp-servers/dev-tools-mcp/dist/index.js"],
@@ -26,13 +19,6 @@
     "finance-mcp": {
       "command": "tsx",
       "args": ["./mcp-servers/finance-mcp/src/index.ts"],
-      "env": {
-        "NODE_ENV": "development"
-      }
-    },
-    "voice-mcp": {
-      "command": "tsx",
-      "args": ["./mcp-servers/voice-mcp/src/index.ts"],
       "env": {
         "NODE_ENV": "development"
       }

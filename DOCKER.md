@@ -4,12 +4,11 @@ This project uses PM2 in Docker to manage multiple Node.js services concurrently
 
 ## Services
 
-The Docker setup runs 4 services:
+The Docker setup runs 3 services:
 
 1. **Voice Agent** (Port 3000) - Main voice interface **[EXPOSED]**
 2. **Finance MCP Server** (Port 3001) - Financial analysis tools **[INTERNAL]**
-3. **Voice MCP Server** (Port 3002) - Voice processing tools **[INTERNAL]**
-4. **Finance HTTP Server** (Port 3003) - HTTP interface for finance tools **[INTERNAL]**
+3. **Finance HTTP Server** (Port 3003) - HTTP interface for finance tools **[INTERNAL]**
 
 Only the Voice Agent port (3000) is exposed externally for security. Internal services communicate within the container.
 
@@ -66,7 +65,6 @@ Inside the container, PM2 manages all processes:
 All service logs are stored in the `./logs` directory and mounted as volumes:
 - `voice-agent.log`
 - `finance-mcp.log`
-- `voice-mcp.log`
 - `finance-http.log`
 
 ## Health Checks

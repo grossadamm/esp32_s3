@@ -1,1 +1,0 @@
-{"version":3,"file":"SimpleServer.d.ts","sourceRoot":"","sources":["../../src/server/SimpleServer.ts"],"names":[],"mappings":"AA0BA,qBAAa,iBAAiB;IAC5B,OAAO,CAAC,EAAE,CAAkB;IAC5B,OAAO,CAAC,MAAM,CAAM;;YASN,aAAa;YAkDb,cAAc;YAad,YAAY;YAcZ,SAAS;IAgChB,KAAK,CAAC,IAAI,GAAE,MAAa,GAAG,IAAI;IAUhC,KAAK,IAAI,IAAI;CAIrB"}

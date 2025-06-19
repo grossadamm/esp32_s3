@@ -2,6 +2,7 @@
 
 import sqlite3 from 'sqlite3';
 import * as dotenv from 'dotenv';
+import path from 'path';
 
 dotenv.config();
 
@@ -57,7 +58,9 @@ class TaxAwareRetirementCalculator {
   ]);
 
   constructor() {
-    this.db = new sqlite3.Database('finance.db');
+    // Use consistent database path with http-server.js
+    const dbPath = path.join(process.cwd(), '..', '..', 'data', 'finance.db');
+    this.db = new sqlite3.Database(dbPath);
   }
 
   private async getCurrentNetWorth(): Promise<number> {

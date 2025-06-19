@@ -1,5 +1,6 @@
 import axios from 'axios';
 import dotenv from 'dotenv';
+import path from 'path';
 
 dotenv.config();
 
@@ -225,7 +226,6 @@ class MonarchAPI {
 // Database integration
 import sqlite3 from 'sqlite3';
 import { promisify } from 'util';
-import path from 'path';
 
 interface DatabaseRow {
   [key: string]: any;
@@ -254,8 +254,8 @@ class FinanceMonarchSync {
   private monarch: MonarchAPI;
 
   constructor() {
-    // Update database path for monorepo structure
-    const dbPath = path.join(process.cwd(), 'data', 'finance.db');
+    // Update database path for monorepo structure - match http-server.ts path
+    const dbPath = path.join(process.cwd(), '..', '..', 'data', 'finance.db');
     this.db = new DatabaseWrapper(dbPath);
     this.monarch = new MonarchAPI();
     this.initializeDatabase();

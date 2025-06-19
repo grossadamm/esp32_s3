@@ -2,14 +2,14 @@
   "mcpServers": {
     "finance-mcp": {
       "command": "node",
-      "args": ["./mcp-servers/finance-mcp/dist/index.js"],
+      "args": ["../mcp-servers/finance-mcp/dist/index.js"],
       "env": {
         "NODE_ENV": "production"
       }
     },
     "dev-tools-mcp": {
       "command": "node",
-      "args": ["./mcp-servers/dev-tools-mcp/dist/index.js"],
+      "args": ["../mcp-servers/dev-tools-mcp/dist/index.js"],
       "env": {
         "NODE_ENV": "production"
       }
@@ -18,7 +18,14 @@
   "development": {
     "finance-mcp": {
       "command": "tsx",
-      "args": ["./mcp-servers/finance-mcp/src/index.ts"],
+      "args": ["../mcp-servers/finance-mcp/src/index.ts"],
+      "env": {
+        "NODE_ENV": "development"
+      }
+    },
+    "dev-tools-mcp": {
+      "command": "tsx",
+      "args": ["../mcp-servers/dev-tools-mcp/src/index.ts"],
       "env": {
         "NODE_ENV": "development"
       }

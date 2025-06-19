@@ -1,6 +1,6 @@
 # MCP Voice Agent Monorepo
 
-A voice-controlled AI agent with MCP (Model Context Protocol) tool integration for financial analysis and management.
+A voice-controlled AI agent with MCP (Model Context Protocol) tool integration for financial analysis and project management.
 
 ## Architecture
 
@@ -16,9 +16,10 @@ mcp-voice-agent/
 │   │   │   └── FileCleanupService.ts
 │   │   ├── routes/
 │   │   │   ├── audio.ts            # Voice/audio processing endpoint
+│   │   │   ├── audio-esp32.ts      # ESP32-optimized audio endpoint
 │   │   │   └── text.ts             # Text processing endpoint
 │   │   └── index.ts                # Main application entry point
-│   ├── tests/                      # Test files
+│   ├── tests/                      # Test files and audio samples
 │   └── package.json
 ├── mcp-servers/                    # MCP tool servers
 │   ├── finance-mcp/                # Financial data and analysis tools
@@ -29,18 +30,50 @@ mcp-voice-agent/
 │   │   │   ├── analysis/           # Financial analysis modules
 │   │   │   └── importers/          # Data import utilities
 │   │   └── package.json
-│   ├── dev-tools-mcp/              # Development tools (future)
-│   │   ├── src/index.ts
-│   │   └── package.json
-│   └── dev-tools-mcp/              # Development tools (future)
+│   └── dev-tools-mcp/              # Development and project management tools
+│       ├── src/
+│       │   ├── index.ts            # MCP server implementation
+│       │   └── http-server.ts      # HTTP API server for projects
+│       └── package.json
 ├── data/
-│   └── finance.db                  # SQLite database with financial data
-├── docker-compose.yml              # Docker Compose configuration
+│   ├── finance.db                  # SQLite database with financial data  
+│   └── projects.db                 # SQLite database with project data
+├── docker-compose.yml              # Docker Compose configuration (3 containers)
 ├── Dockerfile                      # Docker container definition
-├── ecosystem.config.js             # PM2 process management
+├── ecosystem.config.js             # PM2 process management (voice agent only)
 ├── mcp-config.json                 # MCP server registry
 └── package.json                    # Root monorepo configuration
 ```
+
+## Container Architecture
+
+The application uses Docker Compose with **3 separate containers** for clean service isolation:
+
+```
+┌─────────────────────┐    ┌─────────────────────┐    ┌─────────────────────┐
+│   Voice Agent       │    │   Finance API       │    │   Dev Tools API     │
+│   Container         │    │   Container         │    │   Container         │
+│                     │    │                     │    │                     │
+│ ┌─────────────────┐ │    │ ┌─────────────────┐ │    │ ┌─────────────────┐ │
+│ │ Voice Agent     │ │    │ │ Finance HTTP    │ │    │ │ Dev Tools HTTP  │ │
+│ │ (Port 3000)     │ │    │ │ (Port 3000)     │ │    │ │ (Port 3000)     │ │
+│ │                 │ │    │ │ - SQL Queries   │ │    │ │ - Projects CRUD │ │
+│ │ - Text API      │ │    │ │ - Account Info  │ │    │ │ - Project State │ │
+│ │ - Audio API     │ │    │ │ - Transactions  │ │    │ │ - SQLite DB     │ │
+│ │ - MCP Client    │ │    │ │ - Analysis      │ │    │ │                 │ │
+│ │ - ESP32 Support │ │    │ │ - Read-Only DB  │ │    │ │                 │ │
+│ └─────────────────┘ │    │ └─────────────────┘ │    │ └─────────────────┘ │
+└─────────┬───────────┘    └─────────────────────┘    └─────────────────────┘
+          │                                                                   
+       External                          Internal Only         Internal Only  
+    localhost:3000                    (No external ports)    (No external ports)
+```
+
+**Key Benefits:**
+- **Security**: Only voice agent exposed externally
+- **Isolation**: Each service runs in its own container
+- **Scalability**: Services can be scaled independently
+- **Maintenance**: Clean separation of concerns
 
 ## Features
 
@@ -62,6 +95,13 @@ mcp-voice-agent/
 - **House Affordability Analysis**: Comprehensive affordability calculations
 - **Account Management**: Balance and transaction analysis
 
+### Dev Tools MCP Server
+- **Project Management**: Create, list, enter, and delete projects
+- **Project State**: Track current active project across sessions
+- **SQLite Storage**: Persistent project data with timestamps
+- **RESTful API**: Direct HTTP access for project operations
+- **MCP Integration**: Project tools available via MCP protocol
+
 ## Quick Start
 
 ### Prerequisites
@@ -73,7 +113,7 @@ mcp-voice-agent/
 
 ### Docker Setup (Recommended)
 
-The application uses Docker with PM2 for process management, running all services in a single container:
+The application uses Docker Compose with **3 separate containers** for optimal service isolation:
 
 ```bash
 # Clone the repository
@@ -91,12 +131,12 @@ docker compose up --build
 docker compose up -d --build
 ```
 
-**Services Running in Container:**
-- **Voice Agent**: Main API server (port 3000, exposed)
-- **Finance MCP Server**: MCP protocol server (internal)
-- **Finance HTTP Server**: Direct API access (port 3003, internal)
+**Container Services:**
+- **mcp-voice-agent**: Main voice agent (port 3000, externally exposed)
+- **finance-api**: Finance HTTP server (port 3000, internal only)
+- **dev-tools-api**: Dev tools HTTP server (port 3000, internal only)
 
-**Security**: Only the main voice agent port (3000) is exposed externally. All MCP servers run internally for security.
+**Security**: Only the main voice agent (port 3000) is exposed externally. All other services run internally for security.
 
 ### Local Development Setup
 
@@ -128,10 +168,8 @@ ANTHROPIC_API_KEY=your_anthropic_api_key_here
 # Optional - Monarch Money sync
 MONARCH_TOKEN=your_monarch_token_here
 
-# Server configuration (Docker uses these ports internally)
-PORT=3000                    # Voice agent port
-FINANCE_HTTP_PORT=3003      # Finance HTTP server port
-FINANCE_MCP_URL=http://localhost:3003
+# Server configuration (all services use port 3000 internally)
+PORT=3000
 ```
 
 ### Docker Commands
@@ -143,8 +181,13 @@ docker compose up --build
 # Start in background
 docker compose up -d --build
 
-# View logs
+# View logs from all containers
 docker compose logs -f
+
+# View logs from specific container
+docker compose logs -f mcp-voice-agent
+docker compose logs -f finance-api
+docker compose logs -f dev-tools-api
 
 # Access container shell
 docker compose exec mcp-voice-agent /bin/bash
@@ -165,10 +208,16 @@ npm run dev
 # Start finance MCP server (MCP protocol)
 npm run dev:finance-mcp
 
+# Start dev tools MCP server (MCP protocol)  
+npm run dev:dev-tools-mcp
+
 # Start finance HTTP server (direct API access)
 cd mcp-servers/finance-mcp && npm run start:http
 
-  # Sync financial data from Monarch Money
+# Start dev tools HTTP server (direct API access)
+cd mcp-servers/dev-tools-mcp && npm run start:http
+
+# Sync financial data from Monarch Money
 cd mcp-servers/finance-mcp && MONARCH_TOKEN=your_token npx tsx src/MonarchSync.ts
 ```
 
@@ -181,13 +230,14 @@ npm run build
 # Start voice agent
 npm run start:voice
 
-  # Start MCP servers
-  npm run start:finance-mcp
-  ```
+# Start MCP servers
+npm run start:finance-mcp
+npm run start:dev-tools-mcp
+```
 
 ## API Endpoints
 
-### Voice Agent Server (Port 3000)
+### Voice Agent Server (Port 3000 - External Access)
 
 #### POST /api/audio
 Main audio endpoint for ESP32-S3 devices. Returns audio response.
@@ -251,29 +301,12 @@ Process text input directly.
 #### GET /health
 Health check endpoint.
 
-### Finance HTTP Server (Port 3003, Internal)
+### Finance HTTP Server (Internal Only)
 
 Direct REST API access to financial data with read-only security.
 
 #### POST /api/query
 Execute read-only SQL queries on financial database.
-
-**Request:**
-```json
-{
-  "query": "SELECT COUNT(*) FROM transactions WHERE date >= '2024-01-01'",
-  "params": []
-}
-```
-
-**Response:**
-```json
-{
-  "query": "SELECT COUNT(*) FROM transactions WHERE date >= '2024-01-01'",
-  "row_count": 1,
-  "results": [{"COUNT(*)": 1250}]
-}
-```
 
 #### GET /api/accounts
 Get account balances and information.
@@ -305,6 +338,34 @@ Get database schema information.
 #### GET /health
 Health check endpoint.
 
+### Dev Tools HTTP Server (Internal Only)
+
+Direct REST API access for project management.
+
+#### GET /api/projects
+List all projects.
+
+#### POST /api/projects
+Create a new project.
+```json
+{"name": "project-name"}
+```
+
+#### GET /api/projects/current
+Get currently active project.
+
+#### POST /api/projects/current
+Enter/activate a project.
+```json
+{"identifier": "name-or-id"}
+```
+
+#### DELETE /api/projects/current
+Leave current project.
+
+#### DELETE /api/projects/{id}
+Delete project by ID.
+
 ## Testing
 
 ### Docker-based Testing (Recommended)
@@ -324,33 +385,20 @@ curl -X POST \
   -F "audio=@voice-agent/tests/audio/house-affordability.wav" \
   http://localhost:3000/api/audioDebug
 
-# Test with text
+# Test text endpoint
 curl -X POST \
   -H "Content-Type: application/json" \
   -d '{"text": "What are my monthly expenses?"}' \
   http://localhost:3000/api/text
 
+# Test project management
+curl -X POST \
+  -H "Content-Type: application/json" \
+  -d '{"text": "list my projects"}' \
+  http://localhost:3000/api/text
+
 # Health check
 curl http://localhost:3000/health
-```
-
-### Local Testing
-
-```bash
-# Run all tests
-npm test
-
-# Run audio endpoint tests  
-npm run test:audio --workspace=voice-agent
-
-# Generate test audio files
-npm run generate:audio --workspace=voice-agent
-
-# Test HTTP API endpoints directly
-curl http://localhost:3003/api/accounts
-curl -X POST -H "Content-Type: application/json" \
-  -d '{"query": "SELECT COUNT(*) FROM transactions"}' \
-  http://localhost:3003/api/query
 ```
 
 ### Sample Audio Test
@@ -375,11 +423,10 @@ curl -X POST \
 
 ## Process Management
 
-The Docker setup uses PM2 to manage multiple Node.js processes in a single container:
+The Docker setup uses a **simplified PM2 configuration** that only manages the voice agent:
 
 **PM2 Configuration** (`ecosystem.config.js`):
 - **voice-agent**: Main API server (port 3000)
-- **finance-http**: HTTP API server (port 3003)
 
 **PM2 Commands in Container:**
 ```bash
@@ -389,7 +436,7 @@ docker compose exec mcp-voice-agent pm2 status
 # View logs
 docker compose exec mcp-voice-agent pm2 logs
 
-# Restart specific service
+# Restart voice agent
 docker compose exec mcp-voice-agent pm2 restart voice-agent
 
 # Monitor processes
@@ -400,11 +447,12 @@ docker compose exec mcp-voice-agent pm2 monit
 
 ### Container Security
 - **Port Isolation**: Only main voice agent (port 3000) exposed externally
-- **Internal Communication**: MCP servers accessible only within container
-- **Process Isolation**: PM2 manages separate processes for each service
+- **Service Isolation**: Each service runs in separate containers
+- **Internal Communication**: Finance and dev-tools APIs accessible only within Docker network
+- **Process Isolation**: Clean separation of concerns across containers
 
 ### Read-Only Database Access
-The HTTP server uses `SQLITE_OPEN_READONLY` mode to prevent any write operations:
+The finance HTTP server uses `SQLITE_OPEN_READONLY` mode to prevent any write operations:
 - SQL queries are restricted to SELECT statements only
 - Write operations (INSERT, UPDATE, DELETE, etc.) are blocked
 - Database integrity is protected from API access
@@ -421,7 +469,7 @@ Import live financial data from Monarch Money:
 
 ```bash
 # Docker environment
-docker compose exec mcp-voice-agent sh -c "cd mcp-servers/finance-mcp && MONARCH_TOKEN=your_token npx tsx src/MonarchSync.ts"
+docker compose exec finance-api sh -c "cd /app && MONARCH_TOKEN=your_token npx tsx mcp-servers/finance-mcp/src/MonarchSync.ts"
 
 # Local environment  
 cd mcp-servers/finance-mcp
@@ -462,15 +510,46 @@ Sync latest data from Monarch Money.
 - Input: `{ token?: string }`
 - Returns: Sync results and statistics
 
+### Dev Tools MCP Tools
 
+#### list_projects
+List all projects with current status.
+- Input: `{}`
+- Returns: Array of projects with metadata
+
+#### create_project
+Create a new project.
+- Input: `{ name: string }`
+- Returns: Created project information
+
+#### enter_project
+Enter/activate a project by name or ID.
+- Input: `{ identifier: string | number }`
+- Returns: Project information and success status
+
+#### leave_project
+Leave the currently active project.
+- Input: `{}`
+- Returns: Success status
+
+#### delete_project
+Delete a project by name or ID.
+- Input: `{ identifier: string | number }`
+- Returns: Success status
 
 ## Database Schema
 
+### Finance Database (finance.db)
 The SQLite database contains financial data with the following main tables:
 
 - **accounts**: Bank accounts, balances, types, metadata
 - **transactions**: Financial transactions with categories and descriptions
 - **stock_options**: Stock option grants and valuations (if applicable)
+
+### Dev Tools Database (projects.db)
+The SQLite database contains project management data:
+
+- **projects**: Project information with creation/update timestamps
 
 ### Sample Data Statistics
 After Monarch import:
@@ -478,26 +557,17 @@ After Monarch import:
 - **Transactions**: 23,545+ historical transactions with categories
 - **Data Integrity**: All transactions have unique IDs, no duplicates
 
-## Testing
-
-```bash
-# Run all tests
-npm test
-
-# Run audio endpoint tests  
-npm run test:audio --workspace=voice-agent
-
-# Generate test audio files
-npm run generate:audio --workspace=voice-agent
-
-# Test HTTP API endpoints
-curl http://localhost:3000/api/accounts
-curl -X POST -H "Content-Type: application/json" \
-  -d '{"query": "SELECT COUNT(*) FROM transactions"}' \
-  http://localhost:3000/api/query
-```
-
 ## Development Notes
+
+### Container Architecture Benefits
+
+The 3-container architecture provides several advantages:
+
+1. **Security**: Only the voice agent is exposed externally
+2. **Isolation**: Services can't interfere with each other
+3. **Scalability**: Each service can be scaled independently
+4. **Debugging**: Easier to debug individual services
+5. **Maintenance**: Clean separation makes updates safer
 
 ### Adding New MCP Tools
 
@@ -514,8 +584,8 @@ curl -X POST -H "Content-Type: application/json" \
 
 ### Database Security
 
-The HTTP server implements multiple security layers:
-- Read-only database connection prevents writes
+The HTTP servers implement multiple security layers:
+- Read-only database connections prevent writes
 - Query validation blocks dangerous SQL keywords
 - Parameter binding prevents SQL injection
 - Only SELECT statements are permitted
@@ -525,16 +595,28 @@ The HTTP server implements multiple security layers:
 ### Common Issues
 
 1. **Audio upload fails**: Check file format and size (max 25MB)
-2. **Database errors**: Ensure `data/finance.db` exists and is readable  
-3. **MCP connection issues**: Verify MCP servers are running on correct ports
+2. **Database errors**: Ensure databases exist in `data/` directory
+3. **MCP connection issues**: Verify MCP servers are running and accessible
 4. **API key errors**: Check environment variables are set correctly
 5. **Monarch sync fails**: Verify MONARCH_TOKEN is valid and has proper permissions
+6. **Container connection issues**: Ensure Docker Compose network is working
 
 ### Debugging
 
 Enable debug logging:
 ```bash
 DEBUG=* npm run dev
+```
+
+View container logs:
+```bash
+# All containers
+docker compose logs -f
+
+# Specific container
+docker compose logs -f mcp-voice-agent
+docker compose logs -f finance-api
+docker compose logs -f dev-tools-api
 ```
 
 ## Contributing

@@ -11,7 +11,7 @@ import { FileCleanupService } from './services/FileCleanupService.js';
 dotenv.config();
 
 const app = express();
-const port = process.env.PORT || 3001;
+const port = process.env.PORT || 3000;
 
 // Clean uploads directory at startup
 FileCleanupService.cleanupUploadsDirectory();

@@ -1,0 +1,25 @@
+{
+  "name": "dev-tools-mcp",
+  "version": "0.1.0",
+  "description": "Development tools MCP server with project management",
+  "type": "module",
+  "main": "src/index.js",
+  "bin": {
+    "dev-tools-mcp": "src/index.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "start": "node src/index.js",
+    "dev": "tsc --watch"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.0.0",
+    "sqlite3": "^5.1.7",
+    "dotenv": "^16.4.5"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "@types/sqlite3": "^3.1.11",
+    "typescript": "^5.6.0"
+  }
+} 

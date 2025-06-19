@@ -17,8 +17,8 @@ RUN npm ci
 # Copy source code
 COPY . .
 
-# Expose ports
-EXPOSE 3000 3001 3002 3003
+# Expose only the main voice agent port
+EXPOSE 3000
 
 # Copy PM2 configuration
 COPY ecosystem.config.js .

@@ -2,8 +2,9 @@ import { createServer } from 'http';
 import sqlite3 from 'sqlite3';
 import { promisify } from 'util';
 import path from 'path';
-import { HouseAffordabilityCalculator } from './analysis/house-affordability-calculator';
-import { TaxAwareRetirementCalculator } from './analysis/retirement-calculator';
+import fs from 'fs';
+import { HouseAffordabilityCalculator } from './analysis/house-affordability-calculator.js';
+import { TaxAwareRetirementCalculator } from './analysis/retirement-calculator.js';
 class DatabaseWrapper {
     db;
     all;
@@ -22,9 +23,18 @@ class FinanceHTTPServer {
     db;
     server;
     constructor() {
-        // Fix path for running from finance-mcp directory  
-        const dbPath = path.join(process.cwd(), '..', '..', 'data', 'finance.db');
-        console.log(`Connecting to database at: ${dbPath}`);
+        const dataDir = path.join(process.cwd(), '..', 'data');
+        const dbPath = path.join(dataDir, 'finance.db');
+        console.log(`Data directory: ${dataDir}`);
+        console.log(`Database path: ${dbPath}`);
+        // Ensure data directory exists
+        if (!fs.existsSync(dataDir)) {
+            fs.mkdirSync(dataDir, { recursive: true });
+            console.log(`Created data directory: ${dataDir}`);
+        }
+        else {
+            console.log(`Data directory already exists: ${dataDir}`);
+        }
         this.db = new DatabaseWrapper(dbPath, sqlite3.OPEN_READONLY);
         this.server = createServer(this.handleRequest.bind(this));
     }
@@ -323,5 +333,4 @@ process.on('SIGTERM', () => {
     server.close();
     process.exit(0);
 });
-server.start(3000);
-//# sourceMappingURL=http-server.js.map
+server.start(parseInt(process.env.PORT || '3000'));

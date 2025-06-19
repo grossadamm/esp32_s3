@@ -9,7 +9,7 @@ services:
       - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
       - OPENAI_API_KEY=${OPENAI_API_KEY}
     volumes:
-      - ./data:/app/data
+      - ./data:/data
       - ./logs:/app/logs
       - ./uploads:/app/voice-agent/uploads
     restart: unless-stopped
@@ -18,6 +18,31 @@ services:
       interval: 30s
       timeout: 10s
       retries: 3
+
+  dev-tools-api:
+    build: .
+    environment:
+      - NODE_ENV=production
+    volumes:
+      - ./data:/data
+      - ./logs:/app/logs
+    command: ["node", "mcp-servers/dev-tools-mcp/dist/http-server.js"]
+    restart: unless-stopped
+    depends_on:
+      - mcp-voice-agent
+
+  finance-api:
+    build: .
+    environment:
+      - NODE_ENV=production
+      - PORT=3000
+    volumes:
+      - ./data:/data
+      - ./logs:/app/logs
+    command: ["node", "mcp-servers/finance-mcp/dist/http-server.js"]
+    restart: unless-stopped
+    depends_on:
+      - mcp-voice-agent
 
 volumes:
   logs:

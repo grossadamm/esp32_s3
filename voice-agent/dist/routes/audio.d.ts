@@ -1,3 +1,3 @@
 declare const router: import("express-serve-static-core").Router;
-export { router as audioRouter };
+export { router as audioDebugRouter };
 //# sourceMappingURL=audio.d.ts.map

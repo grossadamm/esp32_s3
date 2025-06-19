@@ -12,6 +12,7 @@ export declare class MCPClient {
     constructor();
     getAvailableTools(): Promise<Tool[]>;
     executeTool(name: string, params?: any): Promise<any>;
+    close(): Promise<void>;
 }
 export {};
 //# sourceMappingURL=MCPClient.d.ts.map

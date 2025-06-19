@@ -46,9 +46,11 @@ mcp-voice-agent/
 
 ### Voice Agent
 - **Speech-to-Text**: Audio file upload and transcription using OpenAI Whisper
+- **Text-to-Speech**: AI response generation with OpenAI TTS (for ESP32)
 - **Text Processing**: Direct text input processing  
 - **Multi-LLM Support**: Claude 3.5 Sonnet and GPT-4 support
 - **MCP Integration**: Tool calling via Model Context Protocol
+- **Dual Audio Endpoints**: ESP32-optimized (returns audio) and debug (returns JSON)
 - **RESTful API**: Express.js server with audio and text endpoints
 
 ### Finance MCP Server
@@ -198,7 +200,31 @@ npm run start:voice-mcp
 ### Voice Agent Server (Port 3000)
 
 #### POST /api/audio
-Upload audio file for voice processing.
+Main audio endpoint for ESP32-S3 devices. Returns audio response.
+
+**Request:**
+- Method: POST  
+- Content-Type: multipart/form-data
+- Body: audio file (WAV, MP3, M4A, etc.)
+
+**Response:**
+- Content-Type: audio/mpeg
+- Body: MP3 audio file (AI-generated speech response)
+- Headers:
+  - `X-Transcription`: URL-encoded transcription of input audio
+  - `X-Tools-Used`: Comma-separated list of tools used
+
+**Usage:**
+```bash
+# Send audio and receive audio response
+curl -X POST \
+  -F "audio=@input.wav" \
+  http://localhost:3000/api/audio \
+  --output response.mp3
+```
+
+#### POST /api/audioDebug
+Debug audio endpoint for development. Returns JSON with detailed information.
 
 **Request:**
 - Method: POST  
@@ -297,10 +323,16 @@ Health check endpoint.
 # Start the services
 docker compose up -d --build
 
-# Test with audio file
+# Test ESP32 audio endpoint (returns audio response)
 curl -X POST \
   -F "audio=@voice-agent/tests/audio/house-affordability.wav" \
-  http://localhost:3000/api/audio
+  http://localhost:3000/api/audio \
+  --output response.mp3
+
+# Test debug audio endpoint (returns JSON response)
+curl -X POST \
+  -F "audio=@voice-agent/tests/audio/house-affordability.wav" \
+  http://localhost:3000/api/audioDebug
 
 # Test with text
 curl -X POST \
@@ -336,12 +368,19 @@ curl -X POST -H "Content-Type: application/json" \
 The repository includes test audio files for validation:
 
 ```bash
-# Test house affordability query
+# Test ESP32 audio endpoint (get audio response)
 curl -X POST \
   -F "audio=@voice-agent/tests/audio/house-affordability.wav" \
-  http://localhost:3000/api/audio
+  http://localhost:3000/api/audio \
+  --output house-affordability-response.mp3
+
+# Test debug endpoint (get JSON response)
+curl -X POST \
+  -F "audio=@voice-agent/tests/audio/house-affordability.wav" \
+  http://localhost:3000/api/audioDebug
 
 # Expected: Comprehensive house affordability analysis with real financial data
+# ESP32 endpoint returns audio file, debug endpoint returns JSON with transcription
 ```
 
 ## Process Management

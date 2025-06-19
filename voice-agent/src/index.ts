@@ -4,7 +4,8 @@ import dotenv from 'dotenv';
 import fs from 'fs';
 import path from 'path';
 import { textRouter } from './routes/text.js';
-import { audioRouter } from './routes/audio.js';
+import { audioDebugRouter } from './routes/audio.js';
+import { audioESP32Router } from './routes/audio-esp32.js';
 import { FileCleanupService } from './services/FileCleanupService.js';
 
 dotenv.config();
@@ -28,7 +29,8 @@ app.use(express.json());
 
 // Routes
 app.use('/api/text', textRouter);
-app.use('/api/audio', audioRouter);
+app.use('/api/audio', audioESP32Router);          // Main audio endpoint for ESP32 (returns audio)
+app.use('/api/audioDebug', audioDebugRouter);     // Debug endpoint (returns JSON)
 
 // Health check
 app.get('/health', (req, res) => {
@@ -43,5 +45,6 @@ app.listen(port, () => {
   console.log(`🤖 Voice Agent running on http://localhost:${port}`);
   console.log(`Health check: http://localhost:${port}/health`);
   console.log(`Text endpoint: POST http://localhost:${port}/api/text`);
-  console.log(`Audio endpoint: POST http://localhost:${port}/api/audio`);
+  console.log(`ESP32 Audio endpoint: POST http://localhost:${port}/api/audio (returns audio)`);
+  console.log(`Debug Audio endpoint: POST http://localhost:${port}/api/audioDebug (returns JSON)`);
 }); 

@@ -243,9 +243,9 @@ export class SimpleAmazonImporter {
   }
 
   private parseReturnRow(row: any): AmazonTransaction {
-    const returnId = row['Return ID'] || row['Order ID'];
-    const returnDate = this.parseDate(row['Return Request Date']) || this.parseDate(row['Return Completion Date']);
-    const refundAmount = this.parseAmount(row['DirectDebitRefundAmount']) || this.parseAmount(row['Refund Amount']);
+    const returnId = row['ReversalID'] || row['OrderID'];
+    const returnDate = this.parseDate(row['CreationDate']);
+    const refundAmount = this.parseAmount(row['DirectDebitRefundAmount']);
     
     if (!returnId || !returnDate) {
       throw new Error('Missing required return fields');
@@ -255,22 +255,26 @@ export class SimpleAmazonImporter {
       transaction_id: returnId,
       transaction_type: 'return',
       date: returnDate,
-      status: row['Return Status'] || 'Unknown',
-      product_name: row['Product Name'] || 'Returned Item',
+      status: row['ReversalStatus'] || 'Unknown',
+      product_name: `Return: ${row['ReversalReason'] || 'Unknown reason'}`,
       amount: Math.abs(refundAmount), // Returns are positive (money in)
       details: JSON.stringify({
-        original_order_id: row['Order ID'],
-        return_reason: row['Return Reason'],
-        return_completion_date: this.parseDate(row['Return Completion Date']),
-        quantity_returned: row['Quantity To Be Returned'],
-        refund_type: row['Refund Type']
+        original_order_id: row['OrderID'],
+        reversal_reason: row['ReversalReason'],
+        currency: row['Currency'],
+        quantity: row['Quantity'],
+        reversal_amount_state: row['ReversalAmountState']
       })
     };
   }
 
-  private parseRentalRow(row: any): AmazonTransaction {
-    const rentalId = row['rental_id'] || row['contract_id'];
-    const startDate = this.parseDate(row['rental_start_date']);
+  parseRentalRow(row: any): AmazonTransaction {
+    // Handle BOM character in CSV - first key might have UTF-8 BOM prefix
+    const keys = Object.keys(row);
+    const rentalIdKey = keys.find(key => key.endsWith('rental_id')) || 'rental_id';
+    
+    const rentalId = row[rentalIdKey];
+    const startDate = this.parseDate(row['creation_date']);
     const rentalPrice = this.parseAmount(row['initial_rental_price_amount']);
     
     if (!rentalId || !startDate) {
@@ -281,19 +285,18 @@ export class SimpleAmazonImporter {
       transaction_id: rentalId,
       transaction_type: 'rental',
       date: startDate,
-      status: row['rental_status'] || 'Active',
-      product_name: row['item_name'] || 'Rental Item',
+      status: 'Rental Contract',
+      product_name: `Rental: ${rentalId}`,
       amount: -Math.abs(rentalPrice), // Rentals are negative (money out)
       details: JSON.stringify({
-        rental_end_date: this.parseDate(row['rental_end_date']),
-        item_category: row['item_category'],
-        rental_duration: row['rental_duration'],
-        monthly_price: this.parseAmount(row['monthly_rental_price_amount'])
+        rental_full_value: this.parseAmount(row['rental_full_value']),
+        currency: row['currency'],
+        creation_date: row['creation_date']
       })
     };
   }
 
-  private parseDate(dateStr: string): string | null {
+  parseDate(dateStr: string): string | null {
     if (!dateStr || dateStr === 'Not Available') {
       return null;
     }
@@ -316,7 +319,7 @@ export class SimpleAmazonImporter {
     }
   }
 
-  private parseAmount(amountStr: string): number {
+  parseAmount(amountStr: string): number {
     if (!amountStr || amountStr === 'Not Available' || amountStr === '') {
       return 0;
     }

@@ -1,3 +1,12 @@
+interface AmazonTransaction {
+    transaction_id: string;
+    transaction_type: string;
+    date: string;
+    status: string;
+    product_name: string;
+    amount: number;
+    details: string;
+}
 export declare class SimpleAmazonImporter {
     private db;
     constructor(dbPath?: string);
@@ -24,9 +33,9 @@ export declare class SimpleAmazonImporter {
     private parseRow;
     private parseOrderRow;
     private parseReturnRow;
-    private parseRentalRow;
-    private parseDate;
-    private parseAmount;
+    parseRentalRow(row: any): AmazonTransaction;
+    parseDate(dateStr: string): string | null;
+    parseAmount(amountStr: string): number;
     listAmazonTransactions(transactionType?: string, daysBack?: number, statusFilter?: string): Promise<{
         transactions: any[];
         summary: {
@@ -40,4 +49,5 @@ export declare class SimpleAmazonImporter {
     }>;
     close(): void;
 }
+export {};
 //# sourceMappingURL=amazon-import.d.ts.map

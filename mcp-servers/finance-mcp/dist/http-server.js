@@ -334,3 +334,4 @@ process.on('SIGTERM', () => {
     process.exit(0);
 });
 server.start(parseInt(process.env.PORT || '3000'));
+//# sourceMappingURL=http-server.js.map

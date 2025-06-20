@@ -13,6 +13,7 @@ import {
 import sqlite3 from 'sqlite3';
 import { promisify } from 'util';
 import { MonarchAPI, FinanceMonarchSync } from './MonarchSync.js';
+import { SimpleAmazonImporter } from './importers/amazon-import.js';
 import dotenv from 'dotenv';
 import path from 'path';
 
@@ -51,7 +52,7 @@ class DatabaseWrapper {
 }
 
 // Shared service class for business logic
-class FinanceService {
+export class FinanceService {
   private db: DatabaseWrapper;
   private readonly API_KEY = 'H7NU47N5NIPL94NY'; // Alpha Vantage API key
 
@@ -114,6 +115,8 @@ class FinanceService {
           "SELECT * FROM stock_options WHERE expiration_date < '2028-01-01'",
           "SELECT date, close FROM stock_prices WHERE symbol = 'NFLX' ORDER BY date DESC LIMIT 10",
           "SELECT * FROM transactions WHERE category = 'Food' AND date >= '2024-01-01'",
+          "SELECT * FROM amazon_transactions WHERE transaction_type = 'order' AND date >= '2024-01-01'",
+          "SELECT SUM(amount) as net_amazon_spending FROM amazon_transactions WHERE date >= '2024-01-01'",
         ],
       };
     }
@@ -193,6 +196,32 @@ class FinanceService {
       if (originalToken !== undefined) {
         process.env.MONARCH_TOKEN = originalToken;
       }
+    }
+  }
+
+  async importAmazonData(dataPath: string = '~/Downloads/Your Orders') {
+    const importer = new SimpleAmazonImporter();
+    
+    try {
+      const result = await importer.importAmazonData(dataPath);
+      return result;
+    } finally {
+      importer.close();
+    }
+  }
+
+  async listAmazonTransactions(
+    transactionType: string = 'all',
+    daysBack: number = 30,
+    statusFilter?: string
+  ) {
+    const importer = new SimpleAmazonImporter();
+    
+    try {
+      const result = await importer.listAmazonTransactions(transactionType, daysBack, statusFilter);
+      return result;
+    } finally {
+      importer.close();
     }
   }
 
@@ -316,7 +345,7 @@ class FinanceMCPServer {
         tools: [
           {
             name: 'query_finance_database',
-            description: 'Execute SQL queries on the finance database. Can query transactions, accounts, stock_options, stock_prices, and sp500_prices tables.',
+            description: 'Execute SQL queries on the finance database. Can query transactions, accounts, stock_options, stock_prices, sp500_prices, amazon_transactions, and amazon_import_log tables.',
             inputSchema: {
               type: 'object',
               properties: {
@@ -387,6 +416,46 @@ class FinanceMCPServer {
               required: [],
             },
           },
+          {
+            name: 'import_amazon_data',
+            description: 'Import all Amazon transaction data (orders, returns, rentals) from CSV files in the Your Orders directory.',
+            inputSchema: {
+              type: 'object',
+              properties: {
+                data_path: {
+                  type: 'string',
+                  description: 'Path to Your Orders directory',
+                  default: '~/Downloads/Your Orders',
+                },
+              },
+              required: [],
+            },
+          },
+          {
+            name: 'list_amazon_transactions',
+            description: 'List Amazon transactions by type and date range with filtering options.',
+            inputSchema: {
+              type: 'object',
+              properties: {
+                transaction_type: {
+                  type: 'string',
+                  description: 'Type of transactions to retrieve',
+                  enum: ['order', 'return', 'rental', 'all'],
+                  default: 'all',
+                },
+                days_back: {
+                  type: 'number',
+                  description: 'Number of days back to search',
+                  default: 30,
+                },
+                status_filter: {
+                  type: 'string',
+                  description: 'Optional: filter by status (e.g., "Shipped", "Closed", "Completed")',
+                },
+              },
+              required: [],
+            },
+          },
         ],
       };
     });
@@ -401,6 +470,10 @@ class FinanceMCPServer {
           return this.handleStockDataImport(request.params.arguments);
         case 'sync_monarch_data':
           return this.handleMonarchDataSync(request.params.arguments);
+        case 'import_amazon_data':
+          return this.handleAmazonDataImport(request.params.arguments);
+        case 'list_amazon_transactions':
+          return this.handleListAmazonTransactions(request.params.arguments);
         default:
           throw new Error(`Unknown tool: ${request.params.name}`);
       }
@@ -511,6 +584,75 @@ class FinanceMCPServer {
               success: false,
               error: error instanceof Error ? error.message : String(error),
               message: 'Failed to sync Monarch data'
+            }, null, 2),
+          },
+        ],
+        isError: true,
+      };
+    }
+  }
+
+  private async handleAmazonDataImport(args: any) {
+    try {
+      const { data_path = '~/Downloads/Your Orders' } = args;
+      const result = await this.service.importAmazonData(data_path);
+      
+      return {
+        content: [
+          {
+            type: 'text',
+            text: JSON.stringify(result, null, 2),
+          },
+        ],
+      };
+    } catch (error) {
+      return {
+        content: [
+          {
+            type: 'text',
+            text: JSON.stringify({
+              success: false,
+              error: error instanceof Error ? error.message : String(error),
+              message: 'Failed to import Amazon data'
+            }, null, 2),
+          },
+        ],
+        isError: true,
+      };
+    }
+  }
+
+  private async handleListAmazonTransactions(args: any) {
+    try {
+      const { 
+        transaction_type = 'all', 
+        days_back = 30, 
+        status_filter 
+      } = args;
+      
+      const result = await this.service.listAmazonTransactions(
+        transaction_type,
+        days_back,
+        status_filter
+      );
+      
+      return {
+        content: [
+          {
+            type: 'text',
+            text: JSON.stringify(result, null, 2),
+          },
+        ],
+      };
+    } catch (error) {
+      return {
+        content: [
+          {
+            type: 'text',
+            text: JSON.stringify({
+              success: false,
+              error: error instanceof Error ? error.message : String(error),
+              message: 'Failed to list Amazon transactions'
             }, null, 2),
           },
         ],

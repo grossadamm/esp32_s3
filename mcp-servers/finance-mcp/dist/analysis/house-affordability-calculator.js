@@ -260,3 +260,4 @@ if (import.meta.url === `file://${process.argv[1]}`) {
         process.exit(1);
     });
 }
+//# sourceMappingURL=house-affordability-calculator.js.map

@@ -28,7 +28,7 @@ mcp-voice-agent/
 │   │   │   ├── http-server.ts      # Direct HTTP API server (read-only)
 │   │   │   ├── MonarchSync.ts      # Monarch Money data import
 │   │   │   ├── analysis/           # Financial analysis modules
-│   │   │   └── importers/          # Data import utilities
+│   │   │   └── importers/          # Data import utilities (CSV, Amazon, etc.)
 │   │   └── package.json
 │   └── dev-tools-mcp/              # Development and project management tools
 │       ├── src/
@@ -90,6 +90,7 @@ The application uses Docker Compose with **3 separate containers** for clean ser
 - **MCP Tools**: SQL queries, schema inspection, financial analysis via MCP protocol
 - **HTTP API Server**: Direct REST API access with read-only database security
 - **Monarch Money Integration**: Live financial data import and sync
+- **Amazon Import**: Import Amazon order history, returns, and rentals from CSV exports
 - **Database Queries**: Secure SQL query execution with write protection
 - **Schema Inspection**: Database table and column information
 - **House Affordability Analysis**: Comprehensive affordability calculations
@@ -486,6 +487,41 @@ MONARCH_TOKEN=your_token npx tsx src/MonarchSync.ts
 - Transaction history with categories
 - Account metadata and types
 
+### Amazon Transaction Import
+Import Amazon order history, returns, and rentals from CSV export files:
+
+**Setup:**
+1. Go to [Amazon Account & Login Info](https://www.amazon.com/gp/privacyprefs/manager)
+2. Request "Your Orders" data export
+3. Download and extract to `~/Downloads/Your Orders/`
+
+**Usage via MCP Tools:**
+```bash
+# Import all Amazon data (orders, returns, rentals)
+curl -X POST \
+  -H "Content-Type: application/json" \
+  -d '{"text": "import my Amazon transaction data"}' \
+  http://localhost:3000/api/text
+
+# Query recent Amazon orders
+curl -X POST \
+  -H "Content-Type: application/json" \
+  -d '{"text": "show me my Amazon orders from the last 30 days"}' \
+  http://localhost:3000/api/text
+```
+
+**Data Imported:**
+- **Orders**: Amazon purchase history with products, amounts, and shipping details
+- **Returns**: Refund transactions with original order references
+- **Rentals**: Amazon rental contracts and pricing
+- **Financial Accounting**: Orders negative (money out), returns positive (money in)
+
+**Key Features:**
+- Handles complex Amazon CSV formats with embedded quotes
+- Prevents duplicate imports by transaction ID
+- Stores detailed metadata in JSON format for analysis
+- Proper financial accounting (net spending calculations)
+
 ## MCP Tools
 
 ### Finance MCP Tools
@@ -509,6 +545,16 @@ Calculate house affordability based on financial data.
 Sync latest data from Monarch Money.
 - Input: `{ token?: string }`
 - Returns: Sync results and statistics
+
+#### import_amazon_data
+Import Amazon transaction data from CSV export files.
+- Input: `{ data_path?: string }` (defaults to `~/Downloads/Your Orders`)
+- Returns: Import summary with orders, returns, and rentals processed
+
+#### list_amazon_transactions
+List Amazon transactions with filtering options.
+- Input: `{ transaction_type?: string, days_back?: number, status_filter?: string }`
+- Returns: Filtered Amazon transactions with summary statistics
 
 ### Dev Tools MCP Tools
 
@@ -545,6 +591,8 @@ The SQLite database contains financial data with the following main tables:
 - **accounts**: Bank accounts, balances, types, metadata
 - **transactions**: Financial transactions with categories and descriptions
 - **stock_options**: Stock option grants and valuations (if applicable)
+- **amazon_transactions**: Amazon orders, returns, and rentals with financial accounting
+- **amazon_import_log**: Import history and statistics for Amazon data
 
 ### Dev Tools Database (projects.db)
 The SQLite database contains project management data:

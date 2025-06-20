@@ -199,7 +199,16 @@
     </style>
     <!-- Silero VAD Library -->
     <script src="https://cdn.jsdelivr.net/npm/onnxruntime-web@1.14.0/dist/ort.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@silero/vad@latest/dist/index.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@silero/vad@5.1.2/dist/index.js" onerror="console.error('Failed to load silero VAD library')"></script>
+    <script>
+        // Debug library loading
+        window.addEventListener('load', () => {
+            console.log('Page loaded, checking VAD library...');
+            console.log('window.sileroVAD:', typeof window.sileroVAD);
+            console.log('window.vad:', typeof window.vad);
+            console.log('Available properties:', Object.getOwnPropertyNames(window).filter(name => name.toLowerCase().includes('vad') || name.toLowerCase().includes('silero')));
+        });
+    </script>
 </head>
 <body>
     <div class="container">
@@ -259,17 +268,53 @@
                 console.log('🧠 Loading Silero VAD model...');
                 updateStatus('Loading VAD...', 'connecting');
                 
-                vad = await window.sileroVAD.createVAD({
-                    modelURL: 'https://cdn.jsdelivr.net/npm/@silero/vad@latest/dist/silero_vad.onnx',
-                    modelFetch: fetch,
+                // Check if VAD library is available
+                console.log('Window object check:', {
+                    sileroVAD: typeof window.sileroVAD,
+                    vad: typeof window.vad,
+                    ortSession: typeof window.ortSession
                 });
-                vadReady = true;
-                console.log('✅ VAD model loaded and ready');
-                updateStatus('VAD Ready', 'vad-ready');
-                return true;
+                
+                // Wait for libraries to load if needed
+                let attempts = 0;
+                while ((!window.sileroVAD && !window.vad) && attempts < 10) {
+                    console.log(`Waiting for VAD library... attempt ${attempts + 1}`);
+                    await new Promise(resolve => setTimeout(resolve, 500));
+                    attempts++;
+                }
+                
+                // Try different API approaches
+                let vadInstance = null;
+                
+                if (window.sileroVAD && window.sileroVAD.createVAD) {
+                    console.log('Using sileroVAD.createVAD API');
+                    vadInstance = await window.sileroVAD.createVAD({
+                        modelURL: 'https://cdn.jsdelivr.net/npm/@silero/vad@latest/dist/silero_vad.onnx',
+                        modelFetch: fetch,
+                    });
+                } else if (window.vad && window.vad.MicVAD) {
+                    console.log('Using vad.MicVAD API');
+                    vadInstance = await window.vad.MicVAD.new({
+                        modelURL: 'https://cdn.jsdelivr.net/npm/@silero/vad@latest/dist/silero_vad.onnx'
+                    });
+                } else {
+                    throw new Error('VAD library not found. Available: ' + Object.keys(window).filter(k => k.toLowerCase().includes('vad')).join(', '));
+                }
+                
+                if (vadInstance) {
+                    vad = vadInstance;
+                    vadReady = true;
+                    console.log('✅ VAD model loaded and ready');
+                    updateStatus('VAD Ready', 'vad-ready');
+                    return true;
+                } else {
+                    throw new Error('Failed to create VAD instance');
+                }
+                
             } catch (error) {
                 console.error(`❌ VAD initialization failed: ${error.message}`);
-                updateStatus('VAD Failed', 'disconnected');
+                console.log('Available window objects:', Object.getOwnPropertyNames(window).filter(name => name.toLowerCase().includes('vad') || name.toLowerCase().includes('silero')));
+                updateStatus('VAD Failed - Continuing without', 'connected');
                 return false;
             }
         }
@@ -300,11 +345,14 @@
             console.log('Initializing audio context...');
             await initializeAudio();
 
-            // Initialize VAD
+            // Initialize VAD (non-blocking)
             console.log('Initializing VAD...');
             const vadSuccess = await initializeVAD();
             if (!vadSuccess) {
-                updateTranscription('⚠️ VAD initialization failed. Voice activity detection will be limited.', true);
+                console.log('⚠️ Continuing without VAD - using basic audio recording');
+                updateTranscription('⚠️ VAD unavailable. Using basic voice recording (all audio will be sent).', true);
+                vadReady = false;
+                vad = null;
             }
 
             // Check microphone permission first
@@ -719,20 +767,36 @@
                     const inputBuffer = event.inputBuffer;
                     const audioData = inputBuffer.getChannelData(0);
                     
-                    // 🎤 VAD CHECK - Only send if speech detected
+                    // 🎤 VAD CHECK - Only send if speech detected (or always if VAD disabled)
                     let shouldSendAudio = true;
                     if (vadReady && vad) {
                         try {
-                            const speechProbability = await vad(audioData);
+                            let speechProbability = 0;
+                            
+                            // Handle different VAD API patterns
+                            if (typeof vad === 'function') {
+                                // Direct function call
+                                speechProbability = await vad(audioData);
+                            } else if (vad && typeof vad.process === 'function') {
+                                // Object with process method
+                                speechProbability = await vad.process(audioData);
+                            } else if (vad && typeof vad.predict === 'function') {
+                                // Object with predict method
+                                speechProbability = await vad.predict(audioData);
+                            } else {
+                                console.warn('Unknown VAD API format:', typeof vad, Object.keys(vad || {}));
+                                shouldSendAudio = true; // Fallback to always send
+                            }
+                            
                             const isCurrentlySpeaking = speechProbability > 0.5; // Threshold
                             
                             if (isCurrentlySpeaking !== isSpeaking) {
                                 isSpeaking = isCurrentlySpeaking;
                                 if (isSpeaking) {
-                                    console.log('🗣️ Speech detected (VAD)');
+                                    console.log('🗣️ Speech detected (VAD)', speechProbability.toFixed(3));
                                     updateStatus('Speaking...', 'speaking');
                                 } else {
-                                    console.log('🤫 Speech ended (VAD)');
+                                    console.log('🤫 Speech ended (VAD)', speechProbability.toFixed(3));
                                     updateStatus('Recording...', 'recording');
                                 }
                             }

@@ -14,13 +14,20 @@ This feature allows you to import Amazon transaction data (orders, returns, and 
 ```
 ~/Downloads/Your Orders/
 ├── Retail.OrderHistory.1/
-│   └── Retail.OrderHistory.1.csv
+│   └── Retail.OrderHistory.1.csv           # Physical orders
 ├── Retail.OrdersReturned.1/
-│   └── Retail.OrdersReturned.1.csv
-└── Retail.AmazonRentals/
-    └── datasets/
-        └── Retail.AmazonRentals.rental_contracts/
-            └── Retail.AmazonRentals.rental_contracts.csv
+│   └── Retail.OrdersReturned.1.csv         # Return logistics
+├── Retail.OrdersReturned.Payments.1/
+│   └── Retail.OrdersReturned.Payments.1.csv # Actual refund payments
+├── Retail.AmazonRentals/
+│   └── datasets/
+│       └── Retail.AmazonRentals.rental_contracts/
+│           └── Retail.AmazonRentals.rental_contracts.csv
+├── Digital-Ordering.1/
+│   ├── Digital Orders.csv                   # Digital orders
+│   └── Digital Orders Monetary.csv          # Digital financial transactions
+└── Digital.Orders.Returns.1/
+    └── Digital.Orders.Returns.Monetary.1.csv # Digital refunds
 ```
 
 ## Usage
@@ -50,13 +57,13 @@ await listAmazonTransactions('return', 365, 'Completed');
 
 ### amazon_transactions
 - `id` - Primary key
-- `transaction_id` - Amazon order/return/rental ID
-- `transaction_type` - 'order', 'return', or 'rental'
+- `transaction_id` - Unique identifier (orderID_asin for multi-item orders)
+- `transaction_type` - 'order', 'return', 'rental', 'refund', 'digital_purchase', 'digital_refund'
 - `date` - Transaction date (YYYY-MM-DD)
 - `status` - Order status, return status, etc.
 - `product_name` - Product description
 - `amount` - Amount (negative for purchases, positive for refunds)
-- `details` - JSON blob with additional data
+- `details` - JSON blob with additional data (ASIN, shipping, etc.)
 - `created_at` - Import timestamp
 
 ### amazon_import_log
@@ -69,9 +76,17 @@ await listAmazonTransactions('return', 365, 'Completed');
 ## Financial Accounting
 
 **Amount Convention:**
-- **Orders/Rentals**: Negative amounts (money spent)
-- **Returns/Refunds**: Positive amounts (money received)
+- **Orders/Rentals/Digital Purchases**: Negative amounts (money spent)
+- **Returns/Refunds/Digital Refunds**: Positive amounts (money received)
 - **Net calculation**: `SUM(amount)` gives net Amazon impact
+
+**Transaction Types:**
+- **order**: Physical item purchases (individual items in multi-item orders)
+- **return**: Return logistics (usually $0, for tracking purposes)
+- **refund**: Actual refund payments (money back to account)
+- **rental**: Amazon rental services (e.g., textbook rentals)
+- **digital_purchase**: Digital content (e-books, music, movies, apps)
+- **digital_refund**: Digital content refunds
 
 **Example Queries:**
 ```sql
@@ -114,7 +129,7 @@ Imports all Amazon transaction data from CSV files.
 Lists Amazon transactions with filtering options.
 
 **Parameters:**
-- `transaction_type` (optional): 'order', 'return', 'rental', or 'all'
+- `transaction_type` (optional): 'order', 'return', 'rental', 'refund', 'digital_purchase', 'digital_refund', or 'all'
   - Default: 'all'
 - `days_back` (optional): Number of days to look back
   - Default: 30
@@ -134,8 +149,23 @@ Lists Amazon transactions with filtering options.
 
 ## Data Quality Notes
 
-- **Orders**: ~3,944 records typically, mostly 'Closed' status
-- **Returns**: ~389 records typically, mostly 'Completed' status  
-- **Rentals**: Minimal data (usually 1-2 records from years ago)
-- **Amount formats**: Handles complex Amazon CSV formats like `"'-0.7'"` and `"$14.52"`
-- **Date formats**: Supports ISO 8601 and other common formats 
+**Current Import Success Rates:**
+- **Physical Orders**: 3,646/3,664 imported (99.5% success rate)
+- **Returns**: 339/388 imported (87.4% success rate - logistics only, $0 amounts)
+- **Refunds**: 338/339 imported (99.7% success rate - actual money returned)
+- **Rentals**: 1/1 imported (100% success rate)
+- **Digital Orders**: 491/1,084 imported (45.3% success rate - skips duplicate monetary components)
+- **Digital Refunds**: 4/7 imported (57.1% success rate)
+
+**Key Improvements Made:**
+- **Multi-item Orders**: Fixed duplicate Order ID handling using `orderID_asin` unique keys
+- **BOM Character Handling**: Dynamic key lookup for CSV parsing issues
+- **Date Validation**: Fallback dates for invalid date fields
+- **Field Mapping**: Correct field names for all CSV types
+
+**Data Characteristics:**
+- **Physical Orders**: Each item in multi-item orders gets separate transaction record
+- **Digital Content**: Includes $0 transactions (Kindle Unlimited, Prime Video, promotions)
+- **Amount Formats**: Handles complex Amazon CSV formats like `"'-0.7'"` and `"$14.52"`
+- **Date Formats**: Supports ISO 8601 and other common formats
+- **Total Typical Import**: ~4,800+ transactions representing $80k+ in activity 

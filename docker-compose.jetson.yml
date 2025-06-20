@@ -17,9 +17,9 @@ services:
       - NVIDIA_VISIBLE_DEVICES=all
       - CUDA_VISIBLE_DEVICES=all
       - MCP_CONFIG_PATH=/app/mcp-config.json
-    # Remove external port exposure - nginx will proxy
-    expose:
-      - "3000"
+    # Temporarily expose port for testing
+    ports:
+      - "3000:3000"
     # GPU access for Jetson
     deploy:
       resources:
@@ -49,23 +49,15 @@ services:
       - voice-agent
     restart: unless-stopped
     command: |
-      sh -c "
-        # Create SSL directory
+      sh -c '
         mkdir -p /etc/nginx/ssl
-        
-        # Generate self-signed certificate if it doesn't exist
         if [ ! -f /etc/nginx/ssl/cert.pem ]; then
-          echo 'Generating self-signed SSL certificate...'
-          openssl req -x509 -nodes -days 365 -newkey rsa:2048 \
-            -keyout /etc/nginx/ssl/key.pem \
-            -out /etc/nginx/ssl/cert.pem \
-            -subj '/C=US/ST=Production/L=Jetson/O=VoiceAgent/CN=192.168.1.108'
-          echo 'SSL certificate generated'
+          echo "Generating SSL certificate..."
+          openssl req -x509 -nodes -days 365 -newkey rsa:2048 -keyout /etc/nginx/ssl/key.pem -out /etc/nginx/ssl/cert.pem -subj "/C=US/ST=Production/L=Jetson/O=VoiceAgent/CN=192.168.1.108"
+          echo "SSL certificate generated"
         fi
-        
-        # Start nginx
-        nginx -g 'daemon off;'
-      "
+        nginx -g "daemon off;"
+      '
 
 volumes:
   logs:

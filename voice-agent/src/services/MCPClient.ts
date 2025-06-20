@@ -82,15 +82,15 @@ export class MCPClient {
       
       for (const serverName of serverNames) {
         try {
-          const client = await this.connectToServer(serverName);
+          const client = await this.ensureConnection(serverName);
           const toolsResponse = await client.listTools();
           
-                     // Convert MCP tools to our Tool interface
-           const serverTools: Tool[] = toolsResponse.tools.map(tool => ({
-             name: tool.name,
-             description: tool.description || 'No description available',
-             input_schema: tool.inputSchema as any
-           }));
+          // Convert MCP tools to our Tool interface
+          const serverTools: Tool[] = toolsResponse.tools.map(tool => ({
+            name: tool.name,
+            description: tool.description || 'No description available',
+            input_schema: tool.inputSchema as any
+          }));
           
           allTools.push(...serverTools);
           console.log(`Loaded ${serverTools.length} tools from ${serverName}`);
@@ -107,46 +107,49 @@ export class MCPClient {
     }
   }
 
+  private async ensureConnection(serverName: string): Promise<Client> {
+    const client = this.clients.get(serverName);
+    if (!client) {
+      return await this.connectToServer(serverName);
+    }
+    
+    try {
+      // Test the connection by listing tools
+      await client.listTools();
+      return client;
+    } catch (error) {
+      console.log(`Connection to ${serverName} dropped, reconnecting...`);
+      // Remove the dead connection
+      this.clients.delete(serverName);
+      // Reconnect
+      return await this.connectToServer(serverName);
+    }
+  }
+
   async executeTool(name: string, params: any = {}): Promise<any> {
     try {
-      // Find which server has this tool by checking all connected clients
-      for (const [serverName, client] of this.clients) {
-        const toolsResponse = await client.listTools();
-        const tool = toolsResponse.tools.find(t => t.name === name);
-        
-        if (tool) {
-          console.log(`Executing tool ${name} on server ${serverName}`);
-          const result = await client.callTool({ name, arguments: params });
-          return result.content;
-        }
-      }
-      
-      // If no connected server has the tool, try to connect to all servers first
+      // Ensure all servers are connected and find which one has the tool
       const serverNames = Object.keys(this.config.mcpServers);
+      
       for (const serverName of serverNames) {
-        if (!this.clients.has(serverName)) {
-          try {
-            await this.connectToServer(serverName);
-          } catch (error) {
-            console.error(`Failed to connect to ${serverName}:`, error);
-            continue;
+        try {
+          const client = await this.ensureConnection(serverName);
+          const toolsResponse = await client.listTools();
+          const tool = toolsResponse.tools.find(t => t.name === name);
+          
+          if (tool) {
+            console.log(`Executing tool ${name} on server ${serverName}`);
+            const result = await client.callTool({ name, arguments: params });
+            return result.content;
           }
+        } catch (error) {
+          console.error(`Failed to execute tool on ${serverName}:`, error);
+          // Continue to try other servers
+          continue;
         }
       }
       
-      // Try again after connecting to all servers
-      for (const [serverName, client] of this.clients) {
-        const toolsResponse = await client.listTools();
-        const tool = toolsResponse.tools.find(t => t.name === name);
-        
-        if (tool) {
-          console.log(`Executing tool ${name} on server ${serverName}`);
-          const result = await client.callTool({ name, arguments: params });
-          return result.content;
-        }
-      }
-      
-      throw new Error(`Tool ${name} not found on any connected MCP server`);
+      throw new Error(`Tool ${name} not found on any MCP server`);
     } catch (error) {
       console.error(`Failed to execute tool ${name}:`, error);
       throw error;

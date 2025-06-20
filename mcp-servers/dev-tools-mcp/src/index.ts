@@ -29,8 +29,8 @@ class ProjectService {
   constructor() {
     console.log(`Dev-tools-mcp starting from: ${process.cwd()}`);
     
-    const dataDir = path.join(process.cwd(), '..', 'data');
-    const dbPath = path.join(dataDir, 'projects.db');
+    const dataDir = '/app/data';
+    const dbPath = '/app/data/projects.db';
     
     console.log(`Data directory path: ${dataDir}`);
     console.log(`Database path: ${dbPath}`);

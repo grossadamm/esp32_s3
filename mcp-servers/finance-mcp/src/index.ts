@@ -36,8 +36,8 @@ export class FinanceService {
   private readonly API_KEY = 'H7NU47N5NIPL94NY'; // Alpha Vantage API key
 
   constructor() {
-    // Update database path for monorepo structure
-    const dbPath = path.join(process.cwd(), '..', '..', 'data', 'finance.db');
+    // Database path for Docker container (/app/data/finance.db)
+    const dbPath = '/app/data/finance.db';
     this.db = new DatabaseWrapper(dbPath);
   }
 

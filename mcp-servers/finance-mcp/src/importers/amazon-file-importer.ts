@@ -34,6 +34,13 @@ export class AmazonFileImporter {
 
     console.log(`${CONSOLE_ICONS.CHART} Found ${records.length} ${transactionType} records`);
 
+    // Build order date lookup for concessions
+    let orderDateLookup: Map<string, string> | undefined;
+    if (transactionType === TRANSACTION_TYPES.CONCESSION) {
+      orderDateLookup = await this.buildOrderDateLookup();
+      console.log(`${CONSOLE_ICONS.CHART} Built lookup table with ${orderDateLookup.size} order dates`);
+    }
+
     let processed = 0;
     let imported = 0;
 
@@ -41,7 +48,7 @@ export class AmazonFileImporter {
       processed++;
       
       try {
-        const transaction = this.parser.parseRow(row, transactionType);
+        const transaction = this.parser.parseRow(row, transactionType, orderDateLookup);
         if (transaction) {
           const wasInserted = await this.dbManager.insertTransaction(transaction);
           if (wasInserted) {
@@ -156,5 +163,28 @@ export class AmazonFileImporter {
       case TRANSACTION_TYPES.CONCESSION: return 'Concessions';
       default: return 'Unknown';
     }
+  }
+
+  private async buildOrderDateLookup(): Promise<Map<string, string>> {
+    const orderDateLookup = new Map<string, string>();
+    
+    try {
+      // Query the database for all order transactions to build the lookup
+      const orders = await this.dbManager.queryOrders();
+      
+      for (const order of orders) {
+        // Extract the original order ID from transaction_id (format: orderId_asin)
+        const originalOrderId = order.transaction_id.split('_')[0];
+        if (originalOrderId && order.date) {
+          orderDateLookup.set(originalOrderId, order.date);
+        }
+      }
+      
+      console.log(`${CONSOLE_ICONS.SUCCESS} Built order date lookup with ${orderDateLookup.size} entries`);
+    } catch (error) {
+      console.warn(`${CONSOLE_ICONS.WARNING} Failed to build order date lookup:`, error);
+    }
+    
+    return orderDateLookup;
   }
 } 

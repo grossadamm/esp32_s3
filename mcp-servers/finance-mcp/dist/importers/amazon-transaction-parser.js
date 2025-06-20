@@ -1,7 +1,7 @@
 import { AmazonParsingUtils } from './amazon-utils.js';
 import { TRANSACTION_TYPES, CSV_FIELD_NAMES, SPECIAL_VALUES, FALLBACK_VALUES } from './amazon-constants.js';
 export class AmazonTransactionParser {
-    parseRow(row, transactionType) {
+    parseRow(row, transactionType, orderDateLookup) {
         try {
             switch (transactionType) {
                 case TRANSACTION_TYPES.ORDER:
@@ -15,7 +15,7 @@ export class AmazonTransactionParser {
                 case TRANSACTION_TYPES.DIGITAL_REFUND:
                     return this.parseDigitalRefundRow(row);
                 case TRANSACTION_TYPES.CONCESSION:
-                    return this.parseConcessionRow(row);
+                    return this.parseConcessionRow(row, orderDateLookup);
                 default:
                     throw new Error(`Unknown transaction type: ${transactionType}`);
             }
@@ -134,9 +134,13 @@ export class AmazonTransactionParser {
         }
         // Use order info if available, otherwise use monetary data
         const orderId = order?.OrderId || packetId;
-        const orderDate = order ?
-            (AmazonParsingUtils.parseDate(order.OrderDate) || AmazonParsingUtils.getCurrentDateString()) :
-            AmazonParsingUtils.getCurrentDateString();
+        // Try multiple date fields from order, fallback to reasonable historical date instead of current date
+        let orderDate = FALLBACK_VALUES.FALLBACK_DATE;
+        if (order) {
+            orderDate = AmazonParsingUtils.parseDate(order.OrderDate) ||
+                AmazonParsingUtils.parseDate(order.DeliveryDate) ||
+                FALLBACK_VALUES.FALLBACK_DATE;
+        }
         const marketplace = order?.Marketplace || 'Amazon Digital';
         return {
             transaction_id: AmazonParsingUtils.createUniqueTransactionId(`digital_${packetId}`, monetary[CSV_FIELD_NAMES.DIGITAL_ORDER_ITEM_ID] || 'item'),
@@ -164,7 +168,8 @@ export class AmazonTransactionParser {
         const orderIdKey = AmazonParsingUtils.findDynamicKey(row, ['OrderId']);
         const packetId = row[packetIdKey];
         const orderId = row[orderIdKey];
-        const refundDate = AmazonParsingUtils.getCurrentDateString(); // No date field in CSV
+        // Use actual ReturnDate from CSV instead of fake current date
+        const refundDate = AmazonParsingUtils.parseDate(row['ReturnDate']) || FALLBACK_VALUES.FALLBACK_DATE;
         const refundAmount = AmazonParsingUtils.parseAmount(row[CSV_FIELD_NAMES.TRANSACTION_AMOUNT]);
         if (!packetId || !orderId) {
             throw new Error('Missing required digital refund fields');
@@ -187,7 +192,7 @@ export class AmazonTransactionParser {
             })
         };
     }
-    parseConcessionRow(row) {
+    parseConcessionRow(row, orderDateLookup) {
         // Handle BOM character in CSV using utility
         const orderIdKey = AmazonParsingUtils.findDynamicKey(row, [CSV_FIELD_NAMES.CONCESSION_ORDER_ID]);
         const replacementIdKey = AmazonParsingUtils.findDynamicKey(row, [CSV_FIELD_NAMES.REPLACEMENT_ORDER_ID]);
@@ -196,6 +201,17 @@ export class AmazonTransactionParser {
         if (!originalOrderId) {
             throw new Error('Missing required order id');
         }
+        // Try to get the original order date from lookup, fall back to reasonable historical estimate
+        let concessionDate = '2020-01-01'; // Default to historical date instead of current date
+        if (orderDateLookup?.has(originalOrderId)) {
+            concessionDate = orderDateLookup.get(originalOrderId);
+        }
+        else {
+            // Concessions often reference digital orders or old orders not in our dataset
+            // Use a reasonable historical date instead of current date to avoid fake "recent" transactions
+            concessionDate = '2020-01-01'; // Older than our data range to avoid appearing in recent queries
+            console.warn(`⚠️  No order date found for concession order ${originalOrderId}, using historical fallback date`);
+        }
         const isReplacement = replacementOrderId && replacementOrderId !== SPECIAL_VALUES.NO_REPLACEMENT;
         const transactionId = isReplacement
             ? AmazonParsingUtils.createUniqueTransactionId(`concession_${originalOrderId}`, replacementOrderId)
@@ -203,7 +219,7 @@ export class AmazonTransactionParser {
         return {
             transaction_id: transactionId,
             transaction_type: TRANSACTION_TYPES.CONCESSION,
-            date: AmazonParsingUtils.getCurrentDateString(), // No date in concessions CSV
+            date: concessionDate, // Use original order date or fallback
             status: isReplacement ? 'Replacement Sent' : 'Credit/Refund',
             product_name: `Concession: ${isReplacement ? 'Replacement Order' : 'Account Credit'}`,
             amount: 0, // No direct financial impact to customer

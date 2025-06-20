@@ -51,10 +51,23 @@ export class SimpleAmazonImporter {
         };
     }
     // Delegate to database manager for transaction listing
-    async listAmazonTransactions(transactionType = 'all', daysBack = 30, statusFilter) {
+    async listAmazonTransactions(transactionType = 'all', daysBack = 7, statusFilter) {
+        // Validate days_back limit
+        if (daysBack > 35) {
+            throw new Error(`days_back cannot exceed 35 days (requested: ${daysBack}). Use get_amazon_spending_summary for broader analysis.`);
+        }
+        if (daysBack < 1) {
+            throw new Error(`days_back must be at least 1 day (requested: ${daysBack})`);
+        }
         // Ensure tables exist before querying
         await this.dbManager.ensureTables();
         return await this.dbManager.listTransactions(transactionType, daysBack, statusFilter);
+    }
+    // Delegate to database manager for monthly spending summary
+    async getAmazonSpendingSummary(monthsBack = 12) {
+        // Ensure tables exist before querying
+        await this.dbManager.ensureTables();
+        return await this.dbManager.getMonthlySpendingSummary(monthsBack);
     }
     // Delegate to database manager for clearing tables
     async clearTables() {

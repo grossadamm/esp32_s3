@@ -87,7 +87,7 @@ export class SimpleAmazonImporter {
     // Delegate to database manager for transaction listing
   async listAmazonTransactions(
     transactionType: string = 'all',
-    daysBack: number = 30,
+    daysBack: number = 7,
     statusFilter?: string
   ): Promise<{
     transactions: any[];
@@ -97,9 +97,49 @@ export class SimpleAmazonImporter {
       date_range: { earliest: string; latest: string } | null;
     };
   }> {
+    // Validate days_back limit
+    if (daysBack > 35) {
+      throw new Error(`days_back cannot exceed 35 days (requested: ${daysBack}). Use get_amazon_spending_summary for broader analysis.`);
+    }
+    if (daysBack < 1) {
+      throw new Error(`days_back must be at least 1 day (requested: ${daysBack})`);
+    }
+
     // Ensure tables exist before querying
     await this.dbManager.ensureTables();
     return await this.dbManager.listTransactions(transactionType, daysBack, statusFilter);
+  }
+
+  // Delegate to database manager for monthly spending summary
+  async getAmazonSpendingSummary(monthsBack: number = 12): Promise<{
+    monthly_summaries: Array<{
+      month: string;
+      total_spending: number;
+      total_refunds: number;
+      net_spending: number;
+      transaction_counts: {
+        orders: number;
+        returns: number;
+        refunds: number;
+        digital_purchases: number;
+        digital_refunds: number;
+        rentals: number;
+        concessions: number;
+        total: number;
+      };
+    }>;
+    overall_summary: {
+      total_months: number;
+      total_spending: number;
+      total_refunds: number;
+      net_spending: number;
+      average_monthly_spending: number;
+      date_range: { earliest: string; latest: string } | null;
+    };
+  }> {
+    // Ensure tables exist before querying
+    await this.dbManager.ensureTables();
+    return await this.dbManager.getMonthlySpendingSummary(monthsBack);
   }
 
   // Delegate to database manager for clearing tables

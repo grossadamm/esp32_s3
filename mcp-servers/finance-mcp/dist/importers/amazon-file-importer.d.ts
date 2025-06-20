@@ -18,5 +18,6 @@ export declare class AmazonFileImporter {
     }>;
     private getIconForTransactionType;
     private getDisplayNameForTransactionType;
+    private buildOrderDateLookup;
 }
 //# sourceMappingURL=amazon-file-importer.d.ts.map

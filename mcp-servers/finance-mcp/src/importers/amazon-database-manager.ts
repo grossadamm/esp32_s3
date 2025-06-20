@@ -112,7 +112,7 @@ export class AmazonDatabaseManager {
 
   async listTransactions(
     transactionType: string = 'all',
-    daysBack: number = 30,
+    daysBack: number = 7,
     statusFilter?: string
   ): Promise<{
     transactions: any[];
@@ -122,6 +122,14 @@ export class AmazonDatabaseManager {
       date_range: { earliest: string; latest: string } | null;
     };
   }> {
+    // Final validation at database level
+    if (daysBack > 35) {
+      throw new Error(`days_back cannot exceed 35 days (requested: ${daysBack}). Use getMonthlySpendingSummary for broader analysis.`);
+    }
+    if (daysBack < 1) {
+      throw new Error(`days_back must be at least 1 day (requested: ${daysBack})`);
+    }
+
     let whereClause = 'WHERE date >= date("now", "-" || ? || " days")';
     const params: any[] = [daysBack];
 
@@ -174,6 +182,112 @@ export class AmazonDatabaseManager {
         } : null
       }
     };
+  }
+
+  async getMonthlySpendingSummary(monthsBack: number = 12): Promise<{
+    monthly_summaries: Array<{
+      month: string;
+      total_spending: number;
+      total_refunds: number;
+      net_spending: number;
+      transaction_counts: {
+        orders: number;
+        returns: number;
+        refunds: number;
+        digital_purchases: number;
+        digital_refunds: number;
+        rentals: number;
+        concessions: number;
+        total: number;
+      };
+    }>;
+    overall_summary: {
+      total_months: number;
+      total_spending: number;
+      total_refunds: number;
+      net_spending: number;
+      average_monthly_spending: number;
+      date_range: { earliest: string; latest: string } | null;
+    };
+  }> {
+    // Get monthly aggregated data
+    const monthlyData = await this.db.all(`
+      SELECT 
+        strftime('%Y-%m', date) as month,
+        SUM(CASE WHEN amount < 0 THEN amount ELSE 0 END) as total_spending,
+        SUM(CASE WHEN amount > 0 THEN amount ELSE 0 END) as total_refunds,
+        SUM(amount) as net_spending,
+        COUNT(CASE WHEN transaction_type = 'order' THEN 1 END) as orders,
+        COUNT(CASE WHEN transaction_type = 'return' THEN 1 END) as returns,
+        COUNT(CASE WHEN transaction_type = 'refund' THEN 1 END) as refunds,
+        COUNT(CASE WHEN transaction_type = 'digital_purchase' THEN 1 END) as digital_purchases,
+        COUNT(CASE WHEN transaction_type = 'digital_refund' THEN 1 END) as digital_refunds,
+        COUNT(CASE WHEN transaction_type = 'rental' THEN 1 END) as rentals,
+        COUNT(CASE WHEN transaction_type = 'concession' THEN 1 END) as concessions,
+        COUNT(*) as total_transactions
+      FROM amazon_transactions 
+      WHERE date >= date('now', '-' || ? || ' months')
+      GROUP BY strftime('%Y-%m', date)
+      ORDER BY month DESC
+    `, [monthsBack]);
+
+    // Get overall summary
+    const overallSummary = await this.db.get(`
+      SELECT 
+        COUNT(DISTINCT strftime('%Y-%m', date)) as total_months,
+        SUM(CASE WHEN amount < 0 THEN amount ELSE 0 END) as total_spending,
+        SUM(CASE WHEN amount > 0 THEN amount ELSE 0 END) as total_refunds,
+        SUM(amount) as net_spending,
+        MIN(date) as earliest,
+        MAX(date) as latest
+      FROM amazon_transactions 
+      WHERE date >= date('now', '-' || ? || ' months')
+    `, [monthsBack]);
+
+    const monthlySummaries = monthlyData.map(row => ({
+      month: row.month,
+      total_spending: row.total_spending || 0,
+      total_refunds: row.total_refunds || 0,
+      net_spending: row.net_spending || 0,
+      transaction_counts: {
+        orders: row.orders || 0,
+        returns: row.returns || 0,
+        refunds: row.refunds || 0,
+        digital_purchases: row.digital_purchases || 0,
+        digital_refunds: row.digital_refunds || 0,
+        rentals: row.rentals || 0,
+        concessions: row.concessions || 0,
+        total: row.total_transactions || 0
+      }
+    }));
+
+    const avgMonthlySpending = (overallSummary?.total_months || 0) > 0 
+      ? (overallSummary?.total_spending || 0) / (overallSummary?.total_months || 1)
+      : 0;
+
+    return {
+      monthly_summaries: monthlySummaries,
+      overall_summary: {
+        total_months: overallSummary?.total_months || 0,
+        total_spending: overallSummary?.total_spending || 0,
+        total_refunds: overallSummary?.total_refunds || 0,
+        net_spending: overallSummary?.net_spending || 0,
+        average_monthly_spending: avgMonthlySpending,
+        date_range: overallSummary?.earliest ? {
+          earliest: overallSummary.earliest,
+          latest: overallSummary.latest
+        } : null
+      }
+    };
+  }
+
+  async queryOrders(): Promise<Array<{ transaction_id: string; date: string }>> {
+    const rows = await this.db.all(`
+      SELECT transaction_id, date 
+      FROM amazon_transactions 
+      WHERE transaction_type = 'order'
+    `);
+    return rows as Array<{ transaction_id: string; date: string }>;
   }
 
   async clearTables(): Promise<void> {

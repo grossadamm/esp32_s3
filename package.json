@@ -12,6 +12,7 @@
     "dev": "npm run dev --workspace=voice-agent",
     "test": "npm run test --workspaces",
     "clean": "npm run clean --workspaces",
+    "clean:dist": "rm -rf voice-agent/dist mcp-servers/*/dist",
     "start:voice": "npm run start --workspace=voice-agent",
     "start:finance-mcp": "npm run start --workspace=mcp-servers/finance-mcp",
     "dev:finance-mcp": "npm run dev --workspace=mcp-servers/finance-mcp",

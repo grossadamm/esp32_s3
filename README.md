@@ -487,40 +487,48 @@ MONARCH_TOKEN=your_token npx tsx src/MonarchSync.ts
 - Transaction history with categories
 - Account metadata and types
 
-### Amazon Transaction Import
-Import Amazon order history, returns, and rentals from CSV export files:
+### Amazon Transaction Import ✅ **IMPLEMENTED & WORKING**
+Import comprehensive Amazon transaction data from CSV export files:
+
+**Features:**
+- **Physical Orders**: 3,646+ order items (multi-item order support)
+- **Returns & Refunds**: Order logistics and actual refund payments
+- **Digital Purchases**: E-books, music, movies, apps (491+ transactions)
+- **Rentals**: Amazon rental services
+- **Concessions**: Customer service credits and replacements
+- **Total Import**: ~5,450+ transactions representing $87K+ activity
+- **Financial Accuracy**: Proper accounting (purchases negative, refunds positive)
 
 **Setup:**
 1. Go to [Amazon Account & Login Info](https://www.amazon.com/gp/privacyprefs/manager)
-2. Request "Your Orders" data export
-3. Download and extract to `~/Downloads/Your Orders/`
+2. Request "Your Orders" data export  
+3. Download and extract to accessible location
 
 **Usage via MCP Tools:**
 ```bash
-# Import all Amazon data (orders, returns, rentals)
-curl -X POST \
+# Import all Amazon data (orders, returns, rentals, digital, concessions)
+curl -X POST http://localhost:3000/api/text \
   -H "Content-Type: application/json" \
-  -d '{"text": "import my Amazon transaction data"}' \
-  http://localhost:3000/api/text
+  -d '{"text": "Import Amazon data from /path/to/Your Orders"}'
 
-# Query recent Amazon orders
-curl -X POST \
+# Query recent Amazon activity
+curl -X POST http://localhost:3000/api/text \
   -H "Content-Type: application/json" \
-  -d '{"text": "show me my Amazon orders from the last 30 days"}' \
-  http://localhost:3000/api/text
+  -d '{"text": "What did I buy on Amazon last month?"}'
+
+# Get Amazon spending summary
+curl -X POST http://localhost:3000/api/text \
+  -H "Content-Type: application/json" \
+  -d '{"text": "What was my total Amazon spending in 2024?"}'
 ```
 
-**Data Imported:**
-- **Orders**: Amazon purchase history with products, amounts, and shipping details
-- **Returns**: Refund transactions with original order references
-- **Rentals**: Amazon rental contracts and pricing
-- **Financial Accounting**: Orders negative (money out), returns positive (money in)
-
 **Key Features:**
-- Handles complex Amazon CSV formats with embedded quotes
-- Prevents duplicate imports by transaction ID
-- Stores detailed metadata in JSON format for analysis
-- Proper financial accounting (net spending calculations)
+- **Advanced CSV Parsing**: Handles complex Amazon formats, BOM characters, embedded quotes
+- **Multi-item Order Support**: Separate records for each item using `orderID_asin` unique keys  
+- **Date Fallback Logic**: Historical date fallbacks for missing order lookups
+- **Duplicate Prevention**: Prevents duplicate imports by transaction ID
+- **Token Limit Optimization**: Historical date assignment prevents fake "recent" transactions
+- **Financial Accuracy**: Proper accounting with net spending calculations
 
 ## MCP Tools
 

@@ -163,10 +163,27 @@ export class FinanceService {
             importer.close();
         }
     }
-    async listAmazonTransactions(transactionType = 'all', daysBack = 30, statusFilter) {
+    async listAmazonTransactions(transactionType = 'all', daysBack = 7, statusFilter) {
+        // Validate days_back limit at service level
+        if (daysBack > 35) {
+            throw new Error(`days_back cannot exceed 35 days (requested: ${daysBack}). Use get_amazon_spending_summary for broader analysis.`);
+        }
+        if (daysBack < 1) {
+            throw new Error(`days_back must be at least 1 day (requested: ${daysBack})`);
+        }
         const importer = new SimpleAmazonImporter();
         try {
             const result = await importer.listAmazonTransactions(transactionType, daysBack, statusFilter);
+            return result;
+        }
+        finally {
+            importer.close();
+        }
+    }
+    async getAmazonSpendingSummary(monthsBack = 12) {
+        const importer = new SimpleAmazonImporter();
+        try {
+            const result = await importer.getAmazonSpendingSummary(monthsBack);
             return result;
         }
         finally {
@@ -360,24 +377,43 @@ class FinanceMCPServer {
                     },
                     {
                         name: 'list_amazon_transactions',
-                        description: 'List Amazon transactions by type and date range with filtering options.',
+                        description: 'List recent Amazon transactions by type. IMPORTANT: Always uses small date ranges (7-30 days) to avoid token limits. For broader analysis, use get_amazon_spending_summary tool instead.',
                         inputSchema: {
                             type: 'object',
                             properties: {
                                 transaction_type: {
                                     type: 'string',
                                     description: 'Type of transactions to retrieve',
-                                    enum: ['order', 'return', 'rental', 'refund', 'all'],
+                                    enum: ['order', 'return', 'rental', 'refund', 'digital_purchase', 'digital_refund', 'concession', 'all'],
                                     default: 'all',
                                 },
                                 days_back: {
                                     type: 'number',
-                                    description: 'Number of days back to search',
-                                    default: 30,
+                                    description: 'Number of days back to search (default: 7, maximum: 35 to avoid token limits)',
+                                    default: 7,
+                                    minimum: 1,
+                                    maximum: 35,
                                 },
                                 status_filter: {
                                     type: 'string',
                                     description: 'Optional: filter by status (e.g., "Shipped", "Closed", "Completed")',
+                                },
+                            },
+                            required: [],
+                        },
+                    },
+                    {
+                        name: 'get_amazon_spending_summary',
+                        description: 'Get monthly Amazon spending summaries and totals. Use this for questions about total spending, spending trends, or monthly analysis. Much more efficient than list_amazon_transactions for broad queries.',
+                        inputSchema: {
+                            type: 'object',
+                            properties: {
+                                months_back: {
+                                    type: 'number',
+                                    description: 'Number of months back to analyze (default: 12 months)',
+                                    default: 12,
+                                    minimum: 1,
+                                    maximum: 60,
                                 },
                             },
                             required: [],
@@ -400,6 +436,8 @@ class FinanceMCPServer {
                     return this.handleAmazonDataImport(request.params.arguments);
                 case 'list_amazon_transactions':
                     return this.handleListAmazonTransactions(request.params.arguments);
+                case 'get_amazon_spending_summary':
+                    return this.handleGetAmazonSpendingSummary(request.params.arguments);
                 default:
                     throw new Error(`Unknown tool: ${request.params.name}`);
             }
@@ -544,7 +582,39 @@ class FinanceMCPServer {
     }
     async handleListAmazonTransactions(args) {
         try {
-            const { transaction_type = 'all', days_back = 30, status_filter } = args;
+            const { transaction_type = 'all', days_back = 7, status_filter } = args;
+            // Validate days_back limit
+            if (days_back > 35) {
+                return {
+                    content: [
+                        {
+                            type: 'text',
+                            text: JSON.stringify({
+                                success: false,
+                                error: `days_back cannot exceed 35 days (requested: ${days_back})`,
+                                message: 'For queries beyond 35 days, use get_amazon_spending_summary tool instead to avoid token limits.',
+                                suggestion: 'Try using get_amazon_spending_summary for broader analysis'
+                            }, null, 2),
+                        },
+                    ],
+                    isError: true,
+                };
+            }
+            if (days_back < 1) {
+                return {
+                    content: [
+                        {
+                            type: 'text',
+                            text: JSON.stringify({
+                                success: false,
+                                error: `days_back must be at least 1 day (requested: ${days_back})`,
+                                message: 'Please specify a valid number of days (1-35)'
+                            }, null, 2),
+                        },
+                    ],
+                    isError: true,
+                };
+            }
             const result = await this.service.listAmazonTransactions(transaction_type, days_back, status_filter);
             return {
                 content: [
@@ -564,6 +634,35 @@ class FinanceMCPServer {
                             success: false,
                             error: error instanceof Error ? error.message : String(error),
                             message: 'Failed to list Amazon transactions'
+                        }, null, 2),
+                    },
+                ],
+                isError: true,
+            };
+        }
+    }
+    async handleGetAmazonSpendingSummary(args) {
+        try {
+            const { months_back = 12 } = args;
+            const result = await this.service.getAmazonSpendingSummary(months_back);
+            return {
+                content: [
+                    {
+                        type: 'text',
+                        text: JSON.stringify(result, null, 2),
+                    },
+                ],
+            };
+        }
+        catch (error) {
+            return {
+                content: [
+                    {
+                        type: 'text',
+                        text: JSON.stringify({
+                            success: false,
+                            error: error instanceof Error ? error.message : String(error),
+                            message: 'Failed to get Amazon spending summary'
                         }, null, 2),
                     },
                 ],

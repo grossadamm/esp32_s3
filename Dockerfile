@@ -17,6 +17,19 @@ RUN npm ci
 # Copy source code
 COPY . .
 
+# Build all TypeScript projects to ensure fresh compilation
+RUN echo "Building TypeScript projects..." && \
+    cd voice-agent && npm run build && \
+    cd ../mcp-servers/finance-mcp && npm run build && \
+    cd ../dev-tools-mcp && npm run build && \
+    cd ../..
+
+# Verify builds completed successfully
+RUN echo "Verifying builds..." && \
+    ls -la voice-agent/dist/ && \
+    ls -la mcp-servers/finance-mcp/dist/ && \
+    ls -la mcp-servers/dev-tools-mcp/dist/
+
 # Expose only the main voice agent port
 EXPOSE 3000
 

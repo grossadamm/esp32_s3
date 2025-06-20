@@ -47,6 +47,35 @@ export declare class SimpleAmazonImporter {
             } | null;
         };
     }>;
+    getAmazonSpendingSummary(monthsBack?: number): Promise<{
+        monthly_summaries: Array<{
+            month: string;
+            total_spending: number;
+            total_refunds: number;
+            net_spending: number;
+            transaction_counts: {
+                orders: number;
+                returns: number;
+                refunds: number;
+                digital_purchases: number;
+                digital_refunds: number;
+                rentals: number;
+                concessions: number;
+                total: number;
+            };
+        }>;
+        overall_summary: {
+            total_months: number;
+            total_spending: number;
+            total_refunds: number;
+            net_spending: number;
+            average_monthly_spending: number;
+            date_range: {
+                earliest: string;
+                latest: string;
+            } | null;
+        };
+    }>;
     clearTables(): Promise<void>;
     close(): void;
 }

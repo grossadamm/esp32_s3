@@ -1,13 +1,10 @@
-# Multi-stage build with GPU support detection
-FROM ubuntu:22.04 AS base
+# Lightweight development build
+FROM ubuntu:22.04
 
 # Install system dependencies and Node.js
 RUN apt-get update && apt-get install -y \
     curl \
     bash \
-    python3 \
-    python3-pip \
-    build-essential \
     ca-certificates \
     && curl -fsSL https://deb.nodesource.com/setup_20.x | bash - \
     && apt-get install -y nodejs \
@@ -24,20 +21,15 @@ WORKDIR /app
 COPY package*.json ./
 COPY voice-agent/package*.json ./voice-agent/
 COPY mcp-servers/finance-mcp/package*.json ./mcp-servers/finance-mcp/
+COPY mcp-servers/dev-tools-mcp/package*.json ./mcp-servers/dev-tools-mcp/
 
-# Install all dependencies (keep devDependencies for tsx)
+# Install all dependencies
 RUN npm ci
 
 # Copy source code
 COPY . .
 
-# Install GPU-capable packages for Jetson/NVIDIA hardware
-RUN echo "Installing GPU-capable ML packages for Jetson deployment..." && \
-    pip3 install --no-cache-dir torch torchvision torchaudio && \
-    pip3 install --no-cache-dir openai-whisper transformers && \
-    pip3 install --no-cache-dir onnxruntime-gpu || pip3 install --no-cache-dir onnxruntime
-
-# Build all TypeScript projects to ensure fresh compilation
+# Build all TypeScript projects
 RUN echo "Building TypeScript projects..." && \
     cd voice-agent && npm run build && \
     cd ../mcp-servers/finance-mcp && npm run build && \

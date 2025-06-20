@@ -87,7 +87,7 @@ echo "⚠️  IMPORTANT: You may need to log out and back in for Docker group ch
 echo ""
 echo "Next steps:"
 echo "1. Exit SSH and run voice agent setup from your Mac:"
-echo "   ./scripts/setup-jetson-gpu.sh"
+echo "   ./scripts/jetson-setup-slow.sh"
 echo ""
 echo "2. Or run traditional Docker deployment:"
 echo "   docker compose up --build -d" 

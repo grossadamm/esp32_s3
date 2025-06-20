@@ -305,17 +305,7 @@
             stopRecording();
             
             // Stop any currently playing audio
-            if (currentAudioSource) {
-                try {
-                    currentAudioSource.stop();
-                    currentAudioSource.disconnect();
-                    currentAudioSource = null;
-                    isPlayingAudio = false;
-                    console.log('Stopped audio on disconnect');
-                } catch (e) {
-                    // Audio source may already be stopped
-                }
-            }
+            stopAllAudio();
         }
 
         function handleWebSocketMessage(data) {
@@ -364,6 +354,11 @@
         let audioContext = null;
         let currentAudioSource = null;
         let isPlayingAudio = false;
+        
+        // Audio queue for seamless chunk playback
+        let audioQueue = [];
+        let isProcessingQueue = false;
+        let nextStartTime = 0;
 
         // Initialize audio context (requires user interaction on iOS)
         async function initializeAudio() {
@@ -414,6 +409,28 @@
                     await audioContext.resume();
                 }
 
+                // Convert base64 to AudioBuffer
+                const audioBuffer = await decodeAudioChunk(base64Audio);
+                if (!audioBuffer) return;
+
+                // Add to queue for seamless playback
+                audioQueue.push(audioBuffer);
+                
+                // Start processing queue if not already processing
+                if (!isProcessingQueue) {
+                    processAudioQueue();
+                }
+                
+                updateStatus('🔊 Playing response...', 'connected');
+                
+            } catch (error) {
+                console.error('Error processing audio chunk:', error);
+                updateStatus('🔊 Audio received (process failed)', 'connected');
+            }
+        }
+
+        async function decodeAudioChunk(base64Audio) {
+            try {
                 // Decode base64 to binary (raw PCM16 data from OpenAI)
                 const binaryString = atob(base64Audio);
                 const arrayBuffer = new ArrayBuffer(binaryString.length);
@@ -423,8 +440,6 @@
                     uint8Array[i] = binaryString.charCodeAt(i);
                 }
 
-                console.log('Converting raw PCM16 to AudioBuffer...');
-                
                 // Convert raw PCM16 data to AudioBuffer manually
                 // OpenAI sends PCM16 at 24kHz mono
                 const pcmData = new Int16Array(arrayBuffer);
@@ -432,7 +447,7 @@
                 const numSamples = pcmData.length;
                 const duration = numSamples / sampleRate;
                 
-                console.log(`Audio: ${numSamples} samples, ${duration.toFixed(2)}s duration`);
+                console.log(`Audio chunk: ${numSamples} samples, ${duration.toFixed(3)}s duration`);
                 
                 // Create AudioBuffer manually
                 const audioBuffer = audioContext.createBuffer(1, numSamples, sampleRate);
@@ -443,84 +458,82 @@
                     channelData[i] = pcmData[i] / 32768.0; // Convert from -32768,32767 to -1,1
                 }
                 
-                // Stop any currently playing audio
-                if (currentAudioSource) {
-                    try {
-                        currentAudioSource.stop();
-                        currentAudioSource.disconnect();
-                        console.log('Stopped previous audio source');
-                    } catch (e) {
-                        // Audio source may already be stopped
-                    }
-                }
+                return audioBuffer;
                 
-                console.log('Creating audio source...');
+            } catch (error) {
+                console.error('Error decoding audio chunk:', error);
+                return null;
+            }
+        }
+
+        function processAudioQueue() {
+            if (isProcessingQueue || audioQueue.length === 0) {
+                return;
+            }
+            
+            isProcessingQueue = true;
+            isPlayingAudio = true;
+            
+            // Initialize start time if this is the first chunk
+            if (nextStartTime === 0) {
+                nextStartTime = audioContext.currentTime + 0.1; // Small delay to prevent clicks
+            }
+            
+            console.log(`Processing audio queue: ${audioQueue.length} chunks`);
+            
+            // Process all queued chunks
+            while (audioQueue.length > 0) {
+                const audioBuffer = audioQueue.shift();
                 
-                // Create buffer source and play
+                // Create buffer source
                 const source = audioContext.createBufferSource();
                 source.buffer = audioBuffer;
                 source.connect(audioContext.destination);
                 
-                // Track current source for cleanup
-                currentAudioSource = source;
-                isPlayingAudio = true;
+                // Schedule to play at the exact time the previous chunk ends
+                source.start(nextStartTime);
                 
-                // Clean up when audio ends
-                source.onended = () => {
-                    console.log('Audio playback ended');
-                    currentAudioSource = null;
-                    isPlayingAudio = false;
-                    updateStatus('Connected', 'connected');
-                };
+                // Update next start time for seamless playback
+                nextStartTime += audioBuffer.duration;
                 
-                console.log('Playing audio via Web Audio API...');
-                source.start(0);
+                console.log(`Scheduled chunk at ${nextStartTime - audioBuffer.duration}s, duration: ${audioBuffer.duration.toFixed(3)}s`);
                 
-                updateStatus('🔊 Playing response...', 'connected');
-                
-            } catch (error) {
-                console.error('Error playing audio chunk:', error);
-                
-                // Fallback: try HTML5 audio
-                try {
-                    console.log('Trying HTML5 audio fallback...');
-                    await playAudioFallback(base64Audio);
-                } catch (fallbackError) {
-                    console.error('Fallback audio also failed:', fallbackError);
-                    updateStatus('🔊 Audio received (play failed)', 'connected');
+                // Handle the last chunk ending
+                if (audioQueue.length === 0) {
+                    source.onended = () => {
+                        console.log('Audio queue playback completed');
+                        isProcessingQueue = false;
+                        isPlayingAudio = false;
+                        nextStartTime = 0;
+                        updateStatus('Connected', 'connected');
+                    };
                 }
             }
         }
 
-        async function playAudioFallback(base64Audio) {
-            const audioData = atob(base64Audio);
-            const audioBuffer = new ArrayBuffer(audioData.length);
-            const audioView = new Uint8Array(audioBuffer);
+        function stopAllAudio() {
+            // Clear the queue and reset state
+            audioQueue = [];
+            isProcessingQueue = false;
+            isPlayingAudio = false;
+            nextStartTime = 0;
             
-            for (let i = 0; i < audioData.length; i++) {
-                audioView[i] = audioData.charCodeAt(i);
+            // Stop current audio source if exists
+            if (currentAudioSource) {
+                try {
+                    currentAudioSource.stop();
+                    currentAudioSource.disconnect();
+                    currentAudioSource = null;
+                    console.log('Stopped current audio source');
+                } catch (e) {
+                    // Audio source may already be stopped
+                }
             }
             
-            const audioBlob = new Blob([audioBuffer], { type: 'audio/mp3' });
-            const audioUrl = URL.createObjectURL(audioBlob);
-            const audio = new Audio(audioUrl);
-            
-            audio.volume = 1.0;
-            
-            return new Promise((resolve, reject) => {
-                audio.addEventListener('ended', () => {
-                    URL.revokeObjectURL(audioUrl);
-                    resolve();
-                });
-                
-                audio.addEventListener('error', (e) => {
-                    URL.revokeObjectURL(audioUrl);
-                    reject(e);
-                });
-                
-                audio.play().then(resolve).catch(reject);
-            });
+            console.log('Stopped all audio and cleared queue');
         }
+
+
 
         async function checkMicrophonePermission() {
             try {
@@ -618,17 +631,7 @@
         async function startRecording() {
             try {
                 // Stop any currently playing audio before recording
-                if (currentAudioSource) {
-                    try {
-                        currentAudioSource.stop();
-                        currentAudioSource.disconnect();
-                        currentAudioSource = null;
-                        isPlayingAudio = false;
-                        console.log('Stopped audio before recording');
-                    } catch (e) {
-                        // Audio source may already be stopped
-                    }
-                }
+                stopAllAudio();
                 
                 // Ensure audio context is ready for playback (iOS requirement)
                 await initializeAudio();
@@ -746,17 +749,7 @@
                 }
 
                 // Stop any currently playing audio before test
-                if (currentAudioSource) {
-                    try {
-                        currentAudioSource.stop();
-                        currentAudioSource.disconnect();
-                        currentAudioSource = null;
-                        isPlayingAudio = false;
-                        console.log('Stopped audio before test');
-                    } catch (e) {
-                        // Audio source may already be stopped
-                    }
-                }
+                stopAllAudio();
 
                 const oscillator = audioContext.createOscillator();
                 const gainNode = audioContext.createGain();

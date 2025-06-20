@@ -7,7 +7,7 @@ set -e
 # Purpose: Fast deployment for code changes during development
 # Run when: Making code changes, configuration updates, debugging
 # 
-# Prerequisites: Must run setup-jetson-gpu.sh first for initial setup
+# Prerequisites: Must run jetson-setup-slow.sh first for initial setup
 # 
 # This script leverages pre-built ARM dependencies for fast iterations
 # =============================================================================
@@ -42,7 +42,7 @@ if ! ssh "$JETSON_USER@$JETSON_IP" "test -f $JETSON_PROJECT_DIR/.setup-complete"
     log_error "Initial setup required!"
     echo ""
     echo "Run the setup script first:"
-    echo "  ./scripts/setup-jetson-gpu.sh"
+    echo "  ./scripts/jetson-setup-slow.sh"
     echo ""
     echo "This will:"
     echo "• Build ARM dependencies (25 minutes, one-time)"  
@@ -72,8 +72,8 @@ ssh "$JETSON_USER@$JETSON_IP" "cd $JETSON_PROJECT_DIR && docker compose -f docke
 
 # Quick health check
 log_info "Verifying deployment..."
-sleep 3
-HEALTH_CHECK=$(ssh "$JETSON_USER@$JETSON_IP" "curl -s http://localhost:3000/health" || echo "failed")
+sleep 5  # Extra time for nginx SSL setup
+HEALTH_CHECK=$(ssh "$JETSON_USER@$JETSON_IP" "curl -s -k https://localhost/health" || echo "failed")
 
 if [[ $HEALTH_CHECK == *"ok"* ]] || [[ $HEALTH_CHECK == *"healthy"* ]]; then
     log_success "Voice agent restarted successfully" 
@@ -87,9 +87,10 @@ END_TIME=$(date +%s)
 TOTAL_TIME=$((END_TIME - START_TIME))
 
 echo -e "\n${GREEN}✅ Deployment complete in ${TOTAL_TIME} seconds!${NC}"
-echo -e "🌐 Voice agent: http://$JETSON_IP:3000"
+echo -e "🌐 Voice agent: https://$JETSON_IP"
+echo -e "📱 Mobile UI: https://$JETSON_IP (accept certificate warning)"
 
 echo -e "\n${BLUE}Quick Commands:${NC}"
 echo "• Monitor: ssh $JETSON_USER@$JETSON_IP './voice-agent-gpu/monitor.sh'"
-echo "• Logs: ssh $JETSON_USER@$JETSON_IP 'cd voice-agent-gpu && docker compose -f docker-compose.jetson.yml logs -f voice-agent'"
-echo "• Test: curl http://$JETSON_IP:3000/health" 
+echo "• Logs: ssh $JETSON_USER@$JETSON_IP 'cd voice-agent-gpu && docker compose -f docker-compose.jetson.yml logs -f'"
+echo "• Test: curl -k https://$JETSON_IP/health" 

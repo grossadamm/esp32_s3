@@ -8,7 +8,8 @@ module.exports = {
       interpreter_args: '--import tsx',
       env: {
         NODE_ENV: 'production',
-        PORT: 3000
+        PORT: 3000,
+        DEBUG: '' // Disable express debug logging
       },
       instances: 1,
       autorestart: true,
@@ -17,11 +18,16 @@ module.exports = {
       error_file: './logs/voice-agent-error.log',
       out_file: './logs/voice-agent-out.log',
       log_file: './logs/voice-agent.log',
-      // Clean up PM2 logging
-      pmx: false,                              // Disable PM2 monitoring/metrics
-      log_type: 'raw',                         // Raw logs without PM2 prefixes
-      merge_logs: true,                        // Merge logs from instances
-      log_date_format: 'YYYY-MM-DD HH:mm:ss'  // Clean date format
+      // Disable PM2 monitoring noise
+      pmx: false,
+      monitoring: false,
+      log_type: 'raw',
+      merge_logs: true,
+      log_date_format: 'YYYY-MM-DD HH:mm:ss',
+      // Reduce PM2 internal logging
+      disable_logs: false,
+      source_map_support: false,
+      instance_var: 'INSTANCE_ID'
     }
   ]
 }; 

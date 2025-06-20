@@ -42,9 +42,9 @@ app.use(express.json());
 
 // Routes will be set up after MCP service initialization
 
-// Mobile UI on root path
+// Test Realtime Client on root path
 app.get('/', (req, res) => {
-  res.sendFile(path.join(__dirname, 'mobile-ui.html'));
+  res.sendFile(path.join(__dirname, '../test-realtime-client.html'));
 });
 
 // Health check

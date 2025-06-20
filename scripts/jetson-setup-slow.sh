@@ -100,7 +100,7 @@ if [[ -n "$CONTAINER_NAME" ]]; then
     
     # Wait for startup and test health
     sleep 10
-    HEALTH_CHECK=$(ssh "$JETSON_USER@$JETSON_IP" "curl -s http://localhost:3000/health" || echo "failed")
+    HEALTH_CHECK=$(ssh "$JETSON_USER@$JETSON_IP" "curl -s -k https://localhost/health" || echo "failed")
     
     if [[ $HEALTH_CHECK == *"ok"* ]] || [[ $HEALTH_CHECK == *"healthy"* ]]; then
         log_success "Voice agent is responding successfully"
@@ -125,7 +125,7 @@ echo '🖥️  GPU Status:'
 nvidia-smi --query-gpu=name,utilization.gpu,memory.used --format=csv,noheader
 echo ''
 echo '📈 Health Check:'
-curl -s http://localhost:3000/health || echo 'Health check failed'
+        curl -s -k https://localhost/health || echo 'Health check failed'
 EOF"
 ssh "$JETSON_USER@$JETSON_IP" "chmod +x ~/$JETSON_PROJECT_DIR/monitor.sh"
 
@@ -136,14 +136,14 @@ ssh "$JETSON_USER@$JETSON_IP" "cat > ~/$JETSON_PROJECT_DIR/README.md << 'EOF'
 ## Regular Development
 After making code changes on your Mac:
 \`\`\`bash
-./scripts/deploy-jetson-gpu.sh  # 30 seconds
+./scripts/jetson-deploy-fast.sh  # 30 seconds
 \`\`\`
 
 ## Monitoring
 \`\`\`bash
 ./monitor.sh                    # System status
 docker compose -f docker-compose.jetson.yml logs -f voice-agent  # Live logs
-curl http://localhost:3000/health  # Health check
+curl -k https://localhost/health  # Health check
 \`\`\`
 
 ## When to Re-run Setup
@@ -151,7 +151,7 @@ curl http://localhost:3000/health  # Health check
 - Changed Node.js version  
 - Need clean environment
 \`\`\`bash
-./scripts/setup-jetson-gpu.sh  # 25 minutes
+./scripts/jetson-setup-slow.sh  # 25 minutes
 \`\`\`
 EOF"
 
@@ -166,12 +166,12 @@ echo "================================================================="
 echo "🎉 JETSON SETUP COMPLETE!"
 echo "================================================================="
 echo "Total Time: ${MINUTES}m ${SECONDS}s"
-echo "Voice Agent: http://$JETSON_IP:3000"
+echo "Voice Agent: https://$JETSON_IP"
 echo -e "${NC}"
 
 echo -e "\n${BLUE}Next Steps:${NC}"
 echo "1. Regular deployments (30 seconds):"
-echo "   ./scripts/deploy-jetson-gpu.sh"
+echo "   ./scripts/jetson-deploy-fast.sh"
 echo ""
 echo "2. Monitor system:"
 echo "   ssh $JETSON_USER@$JETSON_IP './voice-agent-gpu/monitor.sh'"
@@ -180,8 +180,8 @@ echo "3. View logs:"
 echo "   ssh $JETSON_USER@$JETSON_IP 'cd voice-agent-gpu && docker compose -f docker-compose.jetson.yml logs -f voice-agent'"
 
 echo -e "\n${YELLOW}Performance Testing:${NC}"
-echo "• Upload audio via web UI at http://$JETSON_IP:3000"
+echo "• Upload audio via web UI at https://$JETSON_IP"
 echo "• Expected 2-3x faster STT processing vs cloud"
 echo "• Monitor GPU usage during processing"
 
-log_success "Setup complete! Use deploy-jetson-gpu.sh for regular development" 
+log_success "Setup complete! Use jetson-deploy-fast.sh for regular development" 

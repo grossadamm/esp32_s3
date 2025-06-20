@@ -1,18 +1,18 @@
-# Development Docker Compose for macOS compatibility
+# Development Docker Compose for macOS compatibility with HTTPS proxy
 # Usage: docker compose -f docker-compose.dev.yml up
 
 services:
   voice-agent:
     build: .
-    ports:
-      - "3000:3000"  # Standard port mapping for macOS compatibility
+    # Remove external port exposure - nginx will proxy
+    expose:
+      - "3000"
     environment:
       - NODE_ENV=development
       - LLM_PROVIDER=openai
       - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
       - OPENAI_API_KEY=${OPENAI_API_KEY}
       - STT_PREFER_LOCAL=false  # Use cloud STT for development
-      - DEBUG=*
     volumes:
       - ./data:/app/data
       - ./logs:/app/logs
@@ -20,9 +20,41 @@ services:
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:3000/health"]
-      interval: 30s
+      interval: 60s  # Less frequent health checks
       timeout: 10s
       retries: 3
+      start_period: 40s  # Give app time to start
+
+  # HTTPS proxy for mobile development
+  nginx-ssl:
+    image: nginx:alpine
+    ports:
+      - "80:80"    # HTTP (redirects to HTTPS)
+      - "443:443"  # HTTPS
+    volumes:
+      - ./ssl:/etc/nginx/ssl
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+    depends_on:
+      - voice-agent
+    restart: unless-stopped
+    command: |
+      sh -c "
+        # Create SSL directory
+        mkdir -p /etc/nginx/ssl
+        
+        # Generate self-signed certificate if it doesn't exist
+        if [ ! -f /etc/nginx/ssl/cert.pem ]; then
+          echo 'Generating self-signed SSL certificate...'
+          openssl req -x509 -nodes -days 365 -newkey rsa:2048 \
+            -keyout /etc/nginx/ssl/key.pem \
+            -out /etc/nginx/ssl/cert.pem \
+            -subj '/C=US/ST=Development/L=Local/O=VoiceAgent/CN=localhost'
+          echo 'SSL certificate generated'
+        fi
+        
+        # Start nginx
+        nginx -g 'daemon off;'
+      "
 
 volumes:
   logs:

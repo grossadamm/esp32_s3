@@ -308,7 +308,12 @@ docker compose up --build -d
 
 ### Docker Setup (Recommended)
 
-The Docker setup runs a **single container** with PM2 managing the voice agent process:
+The Docker setup runs a **single container** with PM2 managing the voice agent process. Choose the right configuration for your environment:
+
+**🔧 Development**: Lightweight build for fast iteration
+**🚀 GPU/Jetson**: Full GPU acceleration for production
+
+Both configurations provide:
 
 1. **Voice Agent** (Port 3000) - Main voice interface with WebSocket support **[EXPOSED]**
    - HTTP endpoints: `/api/text`, `/api/audio` 
@@ -322,14 +327,14 @@ The Docker setup runs a **single container** with PM2 managing the voice agent p
    - **No HTTP servers**: Direct STDIO communication for security and efficiency
 
 **Benefits:**
-- **Simplified Deployment**: Single container to manage
+- **Clear Separation**: Development vs GPU deployment paths
+- **Fast Development**: No unnecessary GPU packages for dev work
 - **Reduced Attack Surface**: No internal HTTP servers
-- **Lower Resource Usage**: Fewer persistent processes
 - **STDIO Security**: MCP communication via secure channels
 
-#### Development (macOS/Windows) 🖥️
+#### Development (macOS/Windows/Linux) 🖥️
 
-For development on macOS or Windows without GPU support:
+For development on any platform without GPU support:
 
 ```bash
 # Clone the repository
@@ -344,7 +349,7 @@ cp .env.example .env
 ./scripts/docker-dev.sh
 
 # Or manually:
-docker compose up --build -d
+docker compose -f docker-compose.dev.yml up --build -d
 ```
 
 **Access:**
@@ -353,20 +358,20 @@ docker compose up --build -d
 
 #### Production (GPU Support) 🚀
 
-For production deployment with GPU support:
+For production deployment with GPU support on Jetson or NVIDIA systems:
 
 ```bash
-# Standard production deployment
-docker compose up --build -d
+# GPU-enabled deployment (Jetson/NVIDIA)
+docker compose -f docker-compose.jetson.yml up --build -d
 
 # View logs
-docker compose logs -f
+docker compose -f docker-compose.jetson.yml logs -f
 
 # Stop services
-docker compose down
+docker compose -f docker-compose.jetson.yml down
 ```
 
-**Note**: Production mode requires NVIDIA Container Toolkit for GPU support.
+**Note**: GPU mode requires NVIDIA Container Toolkit and compatible hardware.
 
 ### Environment Variables
 
@@ -392,23 +397,27 @@ PORT=3000
 ### Docker Commands
 
 ```bash
-# Build and start all services
-docker compose up --build
+# Development (lightweight, no GPU packages)
+docker compose -f docker-compose.dev.yml up --build
+docker compose -f docker-compose.dev.yml up -d --build
 
-# Start in background
-docker compose up -d --build
+# GPU deployment (Jetson/NVIDIA systems)
+docker compose -f docker-compose.jetson.yml up --build
+docker compose -f docker-compose.jetson.yml up -d --build
 
 # View logs from container
-docker compose logs -f
+docker compose -f docker-compose.dev.yml logs -f
+docker compose -f docker-compose.jetson.yml logs -f
 
 # Access container shell
-docker compose exec voice-agent /bin/bash
+docker compose -f docker-compose.dev.yml exec voice-agent /bin/bash
 
 # Stop services
-docker compose down
+docker compose -f docker-compose.dev.yml down
+docker compose -f docker-compose.jetson.yml down
 
 # Rebuild after code changes
-docker compose down && docker compose up --build
+docker compose -f docker-compose.dev.yml down && docker compose -f docker-compose.dev.yml up --build
 ```
 
 ### PM2 Management
@@ -516,7 +525,7 @@ We use a **hybrid deployment strategy** that combines the best of both worlds:
 **Purpose:** Initial Jetson system setup with dependencies  
 **Run from:** Your Mac (executes on Jetson via SSH)
 ```bash
-./scripts/bootstrap-jetson.sh
+./scripts/jetson-bootstrap.sh
 ```
 
 **What it does:**
@@ -530,7 +539,7 @@ We use a **hybrid deployment strategy** that combines the best of both worlds:
 **Purpose:** Initial voice agent setup with ARM dependency builds  
 **Run from:** Your Mac (executes on Jetson via SSH)
 ```bash
-./scripts/setup-jetson-gpu.sh
+./scripts/jetson-setup-slow.sh
 ```
 
 **What it does:**
@@ -545,7 +554,7 @@ We use a **hybrid deployment strategy** that combines the best of both worlds:
 **Purpose:** Regular deployment for code changes  
 **Run from:** Your Mac (executes on Jetson via SSH)
 ```bash
-./scripts/deploy-jetson-gpu.sh
+./scripts/jetson-deploy-fast.sh
 ```
 
 **What it does:**
@@ -561,25 +570,25 @@ We use a **hybrid deployment strategy** that combines the best of both worlds:
 # ALL COMMANDS RUN FROM YOUR MAC (not on Jetson)
 
 # Bootstrap (one-time system setup)
-./scripts/bootstrap-jetson.sh       # 5 minutes
+./scripts/jetson-bootstrap.sh       # 5 minutes
 
 # Initial setup (one-time dependency build)
-./scripts/setup-jetson-gpu.sh       # 25 minutes
+./scripts/jetson-setup-slow.sh       # 25 minutes
 
 # Regular development (many times)
-./scripts/deploy-jetson-gpu.sh      # 30 seconds
-./scripts/deploy-jetson-gpu.sh      # 30 seconds  
-./scripts/deploy-jetson-gpu.sh      # 30 seconds
+./scripts/jetson-deploy-fast.sh      # 30 seconds
+./scripts/jetson-deploy-fast.sh      # 30 seconds  
+./scripts/jetson-deploy-fast.sh      # 30 seconds
 
 # When dependencies change (rare)
-./scripts/setup-jetson-gpu.sh       # 25 minutes
+./scripts/jetson-setup-slow.sh       # 25 minutes
 ```
 
 ### 🔄 Development Workflow
 
 **Daily Development Cycle:**
 1. **Edit code** on Mac (VS Code, full IDE support)
-2. **Deploy changes** from Mac: `./scripts/deploy-jetson-gpu.sh` (30 seconds)
+2. **Deploy changes** from Mac: `./scripts/jetson-deploy-fast.sh` (30 seconds)
 3. **Test immediately**: Voice agent available at http://jetson:3000
 4. **Monitor/debug**: SSH to Jetson for monitoring scripts
 
@@ -604,23 +613,23 @@ git clone https://github.com/yourusername/mcp-voice-agent.git && cd mcp-voice-ag
 cp .env.example .env  # Configure API keys
 
 # ON YOUR MAC: Bootstrap Jetson system (5 minutes)
-./scripts/bootstrap-jetson.sh
+./scripts/jetson-bootstrap.sh
 
 # ON YOUR MAC: One-time voice agent setup (25 minutes)
-./scripts/setup-jetson-gpu.sh
+./scripts/jetson-setup-slow.sh
 
 # Expected output:
 # 🏗️ Jetson GPU Setup (One-time, 25 minutes)
 # Target: nvidia@192.168.1.108
 # [Progress indicators...]
-# ✅ Setup complete! Use deploy-jetson-gpu.sh for regular development
+# ✅ Setup complete! Use jetson-deploy-fast.sh for regular development
 ```
 
 **Regular Development:**
 ```bash
 # ON YOUR MAC: Make code changes
 # ON YOUR MAC: Deploy to Jetson (30 seconds)
-./scripts/deploy-jetson-gpu.sh
+./scripts/jetson-deploy-fast.sh
 
 # Expected output:
 # 🚀 Fast Jetson deployment (~30 seconds)
@@ -657,7 +666,7 @@ ssh nvidia@192.168.1.108 'nvidia-smi && docker --version && df -h'
 ping 192.168.1.108
 
 # Retry setup (safe to re-run)
-./scripts/setup-jetson-gpu.sh
+./scripts/jetson-setup-slow.sh
 ```
 
 **Deploy Script Fails:**
@@ -669,7 +678,7 @@ ssh nvidia@192.168.1.108 'test -f voice-agent-gpu/.setup-complete && echo "Setup
 ssh nvidia@192.168.1.108 'docker ps | grep voice-agent-gpu'
 
 # Re-run deployment
-./scripts/deploy-jetson-gpu.sh
+./scripts/jetson-deploy-fast.sh
 ```
 
 **GPU Not Working:**

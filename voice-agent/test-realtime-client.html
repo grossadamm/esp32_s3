@@ -19,6 +19,9 @@
         .connected { background-color: #d4edda; color: #155724; }
         .disconnected { background-color: #f8d7da; color: #721c24; }
         .recording { background-color: #fff3cd; color: #856404; }
+        .audio-ready { background-color: #cce5ff; color: #004085; }
+        .vad-ready { background-color: #e7f3ff; color: #004085; }
+        .speaking { background-color: #d1ecf1; color: #0c5460; }
         button {
             padding: 10px 20px;
             margin: 5px;
@@ -48,6 +51,9 @@
             font-size: 12px;
         }
     </style>
+    <!-- Silero VAD Library -->
+    <script src="https://cdn.jsdelivr.net/npm/onnxruntime-web@1.14.0/dist/ort.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@silero/vad@latest/dist/index.js"></script>
 </head>
 <body>
     <h1>🎙️ Realtime Audio Test Client</h1>
@@ -73,7 +79,121 @@
         let ws = null;
         let mediaRecorder = null;
         let audioContext = null;
+        let silentAudio = null;
+        let audioContextReady = false;
         let audioQueue = [];
+        let vad = null;
+        let vadReady = false;
+        let isSpeaking = false;
+        
+        // 🎯 AUDIO CONTEXT KEEPALIVE MANAGER
+        class AudioContextKeepAlive {
+            constructor() {
+                this.audioContext = null;
+                this.silentAudio = null;
+                this.isActivated = false;
+                this.monitorInterval = null;
+            }
+            
+            async initializeOnUserGesture() {
+                if (this.isActivated) return;
+                
+                try {
+                    log('🎧 Initializing AudioContext keepalive...');
+                    
+                    // 1. Create AudioContext
+                    this.audioContext = new AudioContext();
+                    
+                    // 2. Resume if suspended (browser policy compliance)
+                    if (this.audioContext.state === 'suspended') {
+                        await this.audioContext.resume();
+                        log('▶️ AudioContext resumed');
+                    }
+                    
+                    // 3. Create silent audio keepalive (cleaner approach)
+                    this.createSilentAudioKeepalive();
+                    
+                    // 4. Set up periodic monitoring
+                    this.startMonitoring();
+                    
+                    this.isActivated = true;
+                    audioContextReady = true;
+                    
+                    log('✅ AudioContext keepalive activated!');
+                    updateStatus('Audio System Ready', 'audio-ready');
+                    
+                } catch (error) {
+                    log(`❌ AudioContext init failed: ${error.message}`);
+                }
+            }
+            
+            createSilentAudioKeepalive() {
+                // Create a silent audio source using AudioContext
+                const sampleRate = this.audioContext.sampleRate;
+                const buffer = this.audioContext.createBuffer(1, 1, sampleRate);
+                
+                // Create silent buffer source
+                const silentSource = this.audioContext.createBufferSource();
+                silentSource.buffer = buffer;
+                silentSource.loop = true;
+                
+                // Create gain node set to almost silent
+                const gainNode = this.audioContext.createGain();
+                gainNode.gain.value = 0.001; // Very quiet
+                
+                // Connect nodes
+                silentSource.connect(gainNode);
+                gainNode.connect(this.audioContext.destination);
+                
+                // Start the silent audio
+                silentSource.start();
+                
+                log('🔇 Silent audio keepalive started');
+            }
+            
+            startMonitoring() {
+                this.monitorInterval = setInterval(() => {
+                    if (this.audioContext && this.audioContext.state === 'suspended') {
+                        log('⚠️ AudioContext suspended, attempting resume...');
+                        this.audioContext.resume().then(() => {
+                            log('✅ AudioContext resumed automatically');
+                        }).catch(err => {
+                            log(`❌ Failed to resume: ${err.message}`);
+                        });
+                    }
+                }, 2000); // Check every 2 seconds
+            }
+            
+            cleanup() {
+                if (this.monitorInterval) {
+                    clearInterval(this.monitorInterval);
+                }
+                if (this.silentAudio) {
+                    this.silentAudio.pause();
+                }
+            }
+        }
+        
+        // 🎤 VAD MANAGER
+        async function initializeVAD() {
+            try {
+                log('🧠 Loading Silero VAD model...');
+                vad = await window.sileroVAD.createVAD({
+                    modelURL: 'https://cdn.jsdelivr.net/npm/@silero/vad@latest/dist/silero_vad.onnx',
+                    modelFetch: fetch,
+                });
+                vadReady = true;
+                log('✅ VAD model loaded and ready');
+                updateStatus('VAD Ready', 'vad-ready');
+                return true;
+            } catch (error) {
+                log(`❌ VAD initialization failed: ${error.message}`);
+                return false;
+            }
+        }
+        
+        // Initialize the keepalive manager
+        const audioKeepAlive = new AudioContextKeepAlive();
         
         function log(message) {
             const logDiv = document.getElementById('log');
@@ -88,8 +208,14 @@
             statusDiv.className = `status ${className}`;
         }
         
-        function connect() {
+        async function connect() {
             try {
+                // 🎯 ACTIVATE AUDIO CONTEXT KEEPALIVE ON USER GESTURE
+                await audioKeepAlive.initializeOnUserGesture();
+                
+                // 🧠 INITIALIZE VAD
+                await initializeVAD();
+                
                 ws = new WebSocket('ws://localhost:3000/api/audio/realtime');
                 
                 ws.onopen = () => {
@@ -158,6 +284,7 @@
             if (mediaRecorder && mediaRecorder.state === 'recording') {
                 stopRecording();
             }
+            audioKeepAlive.cleanup();
         }
         
         function resetButtons() {
@@ -172,40 +299,71 @@
                 // Get microphone access
                 const stream = await navigator.mediaDevices.getUserMedia({ 
                     audio: {
-                        sampleRate: 24000,
+                        sampleRate: 16000, // VAD works best with 16kHz
                         channelCount: 1,
                         echoCancellation: true,
                         noiseSuppression: true
                     }
                 });
                 
-                // Create audio context for processing
-                audioContext = new AudioContext({ sampleRate: 24000 });
+                // Use the keepalive AudioContext or create new one
+                if (!audioContext && audioKeepAlive.audioContext) {
+                    audioContext = audioKeepAlive.audioContext;
+                } else if (!audioContext) {
+                    audioContext = new AudioContext({ sampleRate: 16000 });
+                }
+                
                 const source = audioContext.createMediaStreamSource(stream);
                 
-                // Use MediaRecorder for simplicity (will need conversion for production)
-                mediaRecorder = new MediaRecorder(stream, {
-                    mimeType: 'audio/webm;codecs=opus'
-                });
+                // Create audio processor for VAD
+                const processor = audioContext.createScriptProcessor(4096, 1, 1);
+                source.connect(processor);
+                processor.connect(audioContext.destination);
                 
-                mediaRecorder.ondataavailable = (event) => {
-                    if (event.data.size > 0 && ws && ws.readyState === WebSocket.OPEN) {
-                        // Convert blob to base64 and send
-                        const reader = new FileReader();
-                        reader.onload = () => {
-                            const base64 = reader.result.split(',')[1];
-                            ws.send(JSON.stringify({
-                                type: 'audio_chunk',
-                                audio: base64
-                            }));
-                        };
-                        reader.readAsDataURL(event.data);
+                processor.onaudioprocess = async (event) => {
+                    if (!vadReady || !vad) return;
+                    
+                    const inputBuffer = event.inputBuffer;
+                    const audioData = inputBuffer.getChannelData(0);
+                    
+                    // 🎤 VAD CHECK - Only send if speech detected
+                    const speechProbability = await vad(audioData);
+                    const isCurrentlySpeaking = speechProbability > 0.5; // Threshold
+                    
+                    if (isCurrentlySpeaking !== isSpeaking) {
+                        isSpeaking = isCurrentlySpeaking;
+                        if (isSpeaking) {
+                            log('🗣️ Speech detected (VAD)');
+                            updateStatus('Speaking...', 'speaking');
+                        } else {
+                            log('🤫 Speech ended (VAD)');
+                            updateStatus('Recording...', 'recording');
+                        }
+                    }
+                    
+                    // Only send audio when VAD detects speech
+                    if (isSpeaking && ws && ws.readyState === WebSocket.OPEN) {
+                        // Convert to base64 and send
+                        const audioArray = new Float32Array(audioData);
+                        const buffer = new ArrayBuffer(audioArray.length * 2);
+                        const view = new DataView(buffer);
+                        
+                        // Convert to 16-bit PCM
+                        for (let i = 0; i < audioArray.length; i++) {
+                            const sample = Math.max(-1, Math.min(1, audioArray[i]));
+                            view.setInt16(i * 2, sample * 0x7FFF, true);
+                        }
+                        
+                        const base64 = btoa(String.fromCharCode(...new Uint8Array(buffer)));
+                        
+                        ws.send(JSON.stringify({
+                            type: 'audio_chunk',
+                            audio: base64
+                        }));
                     }
                 };
                 
-                mediaRecorder.start(100); // Send chunks every 100ms
-                
-                log('🎤 Recording started');
+                log('🎤 Recording started with VAD');
                 updateStatus('Recording...', 'recording');
                 document.getElementById('recordBtn').disabled = true;
                 document.getElementById('stopBtn').disabled = false;
@@ -218,11 +376,15 @@
         function stopRecording() {
             if (mediaRecorder && mediaRecorder.state === 'recording') {
                 mediaRecorder.stop();
-                log('🛑 Recording stopped');
-                updateStatus('Connected', 'connected');
-                document.getElementById('recordBtn').disabled = false;
-                document.getElementById('stopBtn').disabled = true;
             }
+            
+            // Reset VAD state
+            isSpeaking = false;
+            
+            log('🛑 Recording stopped');
+            updateStatus('Connected', 'connected');
+            document.getElementById('recordBtn').disabled = false;
+            document.getElementById('stopBtn').disabled = true;
         }
         
         function updateTranscript(text) {
@@ -232,8 +394,13 @@
         }
         
         function playAudioChunk(base64Audio) {
+            if (!audioContextReady || !audioKeepAlive.audioContext) {
+                log('⚠️ AudioContext not ready, audio playback skipped');
+                return;
+            }
+            
             try {
-                // Simple audio playback (for testing)
+                // 🎯 PROPER AUDIO PLAYBACK USING WEB AUDIO API
                 const audioData = atob(base64Audio);
                 const arrayBuffer = new ArrayBuffer(audioData.length);
                 const view = new Uint8Array(arrayBuffer);
@@ -241,8 +408,22 @@
                     view[i] = audioData.charCodeAt(i);
                 }
                 
-                // Note: This is simplified. Production would need proper audio decoding
-                log(`🔊 Received ${arrayBuffer.byteLength} bytes of audio`);
+                // Decode audio data and play through AudioContext
+                audioKeepAlive.audioContext.decodeAudioData(arrayBuffer.slice()).then(audioBuffer => {
+                    const source = audioKeepAlive.audioContext.createBufferSource();
+                    source.buffer = audioBuffer;
+                    source.connect(audioKeepAlive.audioContext.destination);
+                    source.start();
+                    log(`🔊 Playing audio chunk (${audioBuffer.duration.toFixed(2)}s)`);
+                }).catch(error => {
+                    // Fallback to regular audio element if decoding fails
+                    log(`⚠️ AudioContext decode failed, using fallback: ${error.message}`);
+                    const audio = new Audio('data:audio/wav;base64,' + base64Audio);
+                    audio.play().catch(err => {
+                        log(`❌ Fallback audio failed: ${err.message}`);
+                    });
+                });
+                
             } catch (error) {
                 log(`❌ Audio playback error: ${error.message}`);
             }
@@ -251,7 +432,8 @@
         // Auto-connect on page load for testing
         window.onload = () => {
             log('🚀 Page loaded, ready to connect');
+            log('💡 Click "Connect" to activate audio system and load VAD');
         };
     </script>
 </body>
-</html> 
+</html>

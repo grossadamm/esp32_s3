@@ -308,9 +308,29 @@ docker compose up --build -d
 
 ### Docker Setup (Recommended)
 
-The application provides **two Docker configurations** for different environments:
+The Docker setup runs a **single container** with PM2 managing the voice agent process:
+
+1. **Voice Agent** (Port 3000) - Main voice interface with WebSocket support **[EXPOSED]**
+   - HTTP endpoints: `/api/text`, `/api/audio` 
+   - WebSocket endpoint: `/api/audio/realtime` for real-time audio streaming
+   - MCP client integration via STDIO communication
+   - Health checks and status endpoints
+
+2. **MCP Servers** - On-demand processes spawned via STDIO
+   - **Finance MCP**: Financial analysis tools (spawned by voice agent)
+   - **Dev Tools MCP**: Project management tools (spawned by voice agent)
+   - **No HTTP servers**: Direct STDIO communication for security and efficiency
+
+**Benefits:**
+- **Simplified Deployment**: Single container to manage
+- **Reduced Attack Surface**: No internal HTTP servers
+- **Lower Resource Usage**: Fewer persistent processes
+- **STDIO Security**: MCP communication via secure channels
 
 #### Development (macOS/Windows) 🖥️
+
+For development on macOS or Windows without GPU support:
+
 ```bash
 # Clone the repository
 git clone <repo-url>
@@ -320,36 +340,33 @@ cd mcp-voice-agent
 cp .env.example .env
 # Edit .env with your API keys (see Environment Variables section below)
 
-# Easy development setup (no GPU support)
+# Easy one-command setup
 ./scripts/docker-dev.sh
 
 # Or manually:
-docker compose -f docker-compose.dev.yml up --build -d
-```
-
-#### Production (Jetson/GPU) 🚀
-```bash
-# Production deployment with GPU support
 docker compose up --build -d
 ```
 
-**Container Service:**
-- **voice-agent**: Single container with voice agent (port 3000) and MCP servers (STDIO communication)
+**Access:**
+- 📱 **Voice Agent**: `http://localhost:3000/`
+- 📊 **Health Check**: `http://localhost:3000/health`
 
-**Architecture**: All services run within a single container using PM2 process management and STDIO-based MCP communication.
+#### Production (GPU Support) 🚀
 
-### Local Development Setup
+For production deployment with GPU support:
 
 ```bash
-# Clone and install dependencies
-git clone <repo-url>
-cd mcp-voice-agent
-npm install
+# Standard production deployment
+docker compose up --build -d
 
-# Set up environment variables
-cp .env.example .env
-# Edit .env with your API keys
+# View logs
+docker compose logs -f
+
+# Stop services
+docker compose down
 ```
+
+**Note**: Production mode requires NVIDIA Container Toolkit for GPU support.
 
 ### Environment Variables
 
@@ -384,9 +401,6 @@ docker compose up -d --build
 # View logs from container
 docker compose logs -f
 
-# View specific service logs within container
-docker compose logs -f voice-agent
-
 # Access container shell
 docker compose exec voice-agent /bin/bash
 
@@ -397,17 +411,34 @@ docker compose down
 docker compose down && docker compose up --build
 ```
 
+### PM2 Management
+
+Inside the container, PM2 manages the voice agent process:
+
+- View status: `docker compose exec voice-agent pm2 status`
+- View logs: `docker compose exec voice-agent pm2 logs`
+- Restart voice agent: `docker compose exec voice-agent pm2 restart voice-agent`
+- Monitor processes: `docker compose exec voice-agent pm2 monit`
+
+**MCP Server Management:**
+- MCP servers are spawned automatically by the voice agent as needed
+- No manual process management required for MCP servers
+- Communication happens via secure STDIO channels
+
 ### Local Development (Without Docker)
 
 ```bash
+# Clone and install dependencies
+git clone <repo-url>
+cd mcp-voice-agent
+npm install
+
+# Set up environment variables
+cp .env.example .env
+# Edit .env with your API keys
+
 # Start voice agent in development mode
 npm run dev
-
-# Start finance MCP server (MCP protocol)
-npm run dev:finance-mcp
-
-# Start dev tools MCP server (MCP protocol)  
-npm run dev:dev-tools-mcp
 
 # MCP servers are spawned automatically by voice agent via STDIO
 # No manual server startup needed for MCP communication
@@ -416,7 +447,7 @@ npm run dev:dev-tools-mcp
 cd mcp-servers/finance-mcp && MONARCH_TOKEN=your_token npx tsx src/MonarchSync.ts
 ```
 
-### Production
+### Production (Without Docker)
 
 ```bash
 # Build all workspaces
@@ -424,10 +455,229 @@ npm run build
 
 # Start voice agent
 npm run start:voice
+```
 
-# Start MCP servers
-npm run start:finance-mcp
-npm run start:dev-tools-mcp
+### Logs
+
+Service logs are stored in the `./logs` directory and mounted as volumes:
+- `voice-agent.log` - Main voice agent logs
+- `voice-agent-error.log` - Voice agent error logs
+- `voice-agent-out.log` - Voice agent output logs
+
+### Health Checks
+
+The main service includes health checks on port 3000. The voice agent implements comprehensive health monitoring:
+- `/health` - Overall service health
+- `/api/hardware-status` - GPU and hardware capabilities  
+- `/api/stt-status` - Speech-to-text service status
+
+### Troubleshooting
+
+1. **Port conflicts:** Only port 3000 is exposed - change in `docker-compose.yml` if needed
+2. **Build issues:** Run `docker compose up --build` to rebuild
+3. **Process issues:** Use `./scripts/pm2-status.sh` to check PM2 processes
+4. **Clean restart:** `docker compose down && docker compose up --build`
+5. **MCP communication issues:** Check voice agent logs for STDIO connection errors
+
+## Jetson Deployment
+
+### 🎯 Why Jetson Hybrid GPU Deployment?
+
+We use a **hybrid deployment strategy** that combines the best of both worlds:
+
+**Problem We're Solving:**
+- ❌ **Native Jetson deployment**: PyTorch can't detect CUDA properly
+- ❌ **Full Docker builds**: Take 2+ hours due to slow ARM compilation
+- ❌ **Cross-platform builds**: 30% success rate due to native dependencies
+
+**Our Solution: Hybrid GPU Containers**
+- ✅ **GPU access**: Use proven `dustynv/l4t-pytorch:r36.4.0` base image
+- ✅ **Fast development**: Build once (25 min), iterate fast (30 sec)
+- ✅ **No cross-compilation**: Dependencies built natively on Jetson ARM
+- ✅ **Container benefits**: Isolation, GPU runtime, reproducibility
+
+**Expected Performance Improvement:**
+- **STT processing**: 2-5s (cloud) → 1-3s (local GPU) = **2-3x faster**
+- **Total voice-to-voice**: ~60s → ~15-30s = **50% improvement**
+
+### 📋 Prerequisites
+
+- Jetson Orin with JetPack 6.1 (L4T R36.4.3)
+- Docker with GPU runtime configured
+- SSH access to Jetson
+- ~25GB free space on Jetson
+
+### 🚀 Three-Stage Deployment Strategy
+
+> **🖥️ IMPORTANT: All scripts run on your Mac, not on the Jetson**  
+> The scripts use SSH to execute commands remotely on the Jetson
+
+#### Stage 1: Bootstrap (One-Time Setup)
+**Purpose:** Initial Jetson system setup with dependencies  
+**Run from:** Your Mac (executes on Jetson via SSH)
+```bash
+./scripts/bootstrap-jetson.sh
+```
+
+**What it does:**
+- Installs Node.js 18 LTS
+- Updates Docker and NVIDIA Container Toolkit
+- Configures system dependencies
+- Tests GPU access and Docker integration
+- Prepares Jetson for voice agent deployment
+
+#### Stage 2: Setup (25 minutes)
+**Purpose:** Initial voice agent setup with ARM dependency builds  
+**Run from:** Your Mac (executes on Jetson via SSH)
+```bash
+./scripts/setup-jetson-gpu.sh
+```
+
+**What it does:**
+- Validates Jetson prerequisites (GPU, Docker, disk space)
+- Transfers project files via rsync
+- **Builds ARM dependencies natively** (the expensive 20-25 minute part)
+- Sets up GPU container with dustynv/l4t-pytorch base image
+- Creates monitoring and reference scripts
+- Marks setup as complete for fast deployments
+
+#### Stage 3: Deploy (30 seconds)
+**Purpose:** Regular deployment for code changes  
+**Run from:** Your Mac (executes on Jetson via SSH)
+```bash
+./scripts/deploy-jetson-gpu.sh
+```
+
+**What it does:**
+- Checks that setup was completed (fails fast if not)
+- Syncs code changes (excludes pre-built node_modules)
+- Builds TypeScript using existing ARM dependencies  
+- Restarts GPU container
+- Verifies deployment health
+
+### Clear Workflow
+
+```bash
+# ALL COMMANDS RUN FROM YOUR MAC (not on Jetson)
+
+# Bootstrap (one-time system setup)
+./scripts/bootstrap-jetson.sh       # 5 minutes
+
+# Initial setup (one-time dependency build)
+./scripts/setup-jetson-gpu.sh       # 25 minutes
+
+# Regular development (many times)
+./scripts/deploy-jetson-gpu.sh      # 30 seconds
+./scripts/deploy-jetson-gpu.sh      # 30 seconds  
+./scripts/deploy-jetson-gpu.sh      # 30 seconds
+
+# When dependencies change (rare)
+./scripts/setup-jetson-gpu.sh       # 25 minutes
+```
+
+### 🔄 Development Workflow
+
+**Daily Development Cycle:**
+1. **Edit code** on Mac (VS Code, full IDE support)
+2. **Deploy changes** from Mac: `./scripts/deploy-jetson-gpu.sh` (30 seconds)
+3. **Test immediately**: Voice agent available at http://jetson:3000
+4. **Monitor/debug**: SSH to Jetson for monitoring scripts
+
+**When to Re-run Setup:**
+- Added/removed npm packages (package.json changed)
+- Node.js version updates
+- Need clean environment
+- Initial deployment
+
+**Never Need Setup Again For:**
+- Code changes (TypeScript, JavaScript)
+- Configuration changes (environment variables)
+- Debugging and restarts
+- UI modifications
+
+### 🛠️ Usage Instructions
+
+**Initial Deployment:**
+```bash
+# ON YOUR MAC: Clone project and configure environment
+git clone <repo> && cd mcp-voice-agent
+cp .env.example .env  # Configure API keys
+
+# ON YOUR MAC: Bootstrap Jetson system (5 minutes)
+./scripts/bootstrap-jetson.sh
+
+# ON YOUR MAC: One-time voice agent setup (25 minutes)
+./scripts/setup-jetson-gpu.sh
+
+# Expected output:
+# 🏗️ Jetson GPU Setup (One-time, 25 minutes)
+# Target: nvidia@192.168.1.108
+# [Progress indicators...]
+# ✅ Setup complete! Use deploy-jetson-gpu.sh for regular development
+```
+
+**Regular Development:**
+```bash
+# ON YOUR MAC: Make code changes
+# ON YOUR MAC: Deploy to Jetson (30 seconds)
+./scripts/deploy-jetson-gpu.sh
+
+# Expected output:
+# 🚀 Fast Jetson deployment (~30 seconds)
+# ✅ Deployment complete in 25 seconds!
+# 🌐 Voice agent: http://192.168.1.108:3000
+```
+
+### 📊 Performance Analysis
+
+**Time Investment:**
+| **Operation** | **Frequency** | **Duration** |
+|---------------|---------------|--------------|
+| Bootstrap | Once | 5 minutes |
+| Initial setup | Once | 25 minutes |
+| Dependency updates | Weekly | 25 minutes |
+| Code deployments | Daily | 30 seconds |
+
+**Expected Performance:**
+- **STT Processing**: 1-3 seconds (vs 2-5s cloud) = **2-3x faster**
+- **Development cycles**: 30 seconds (vs 20+ minutes rebuild)
+- **GPU utilization**: 20-40% during voice processing
+- **Memory usage**: ~2GB (container + PyTorch + models)
+
+### 🔧 Troubleshooting
+
+**Common Issues:**
+
+**Setup Script Fails:**
+```bash
+# Check prerequisites
+ssh nvidia@192.168.1.108 'nvidia-smi && docker --version && df -h'
+
+# Check network connectivity  
+ping 192.168.1.108
+
+# Retry setup (safe to re-run)
+./scripts/setup-jetson-gpu.sh
+```
+
+**Deploy Script Fails:**
+```bash
+# Check if setup was completed
+ssh nvidia@192.168.1.108 'test -f voice-agent-gpu/.setup-complete && echo "Setup OK" || echo "Run setup first"'
+
+# Check container status
+ssh nvidia@192.168.1.108 'docker ps | grep voice-agent-gpu'
+
+# Re-run deployment
+./scripts/deploy-jetson-gpu.sh
+```
+
+**GPU Not Working:**
+```bash
+# Test GPU access in container
+ssh nvidia@192.168.1.108 'docker exec voice-agent-gpu_voice-agent-gpu_1 python3 -c "import torch; print(torch.cuda.is_available())"'
+
+# Should output: True
 ```
 
 ## API Endpoints

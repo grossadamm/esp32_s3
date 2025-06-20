@@ -70,6 +70,19 @@
             animation: pulse 1.5s infinite;
         }
 
+        .status.vad-ready {
+            background: rgba(33, 150, 243, 0.2);
+            border: 2px solid #2196F3;
+            color: #2196F3;
+        }
+
+        .status.speaking {
+            background: rgba(255, 152, 0, 0.2);
+            border: 2px solid #FF9800;
+            color: #FF9800;
+            animation: pulse 1.5s infinite;
+        }
+
         @keyframes pulse {
             0% { transform: scale(1); }
             50% { transform: scale(1.05); }
@@ -184,6 +197,9 @@
             }
         }
     </style>
+    <!-- Silero VAD Library -->
+    <script src="https://cdn.jsdelivr.net/npm/onnxruntime-web@1.14.0/dist/ort.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@silero/vad@latest/dist/index.js"></script>
 </head>
 <body>
     <div class="container">
@@ -217,13 +233,16 @@
         </div>
     </div>
 
-    <div class="version">v1.0</div>
+    <div class="version">v1.1</div>
 
     <script>
         let ws = null;
         let isRecording = false;
         let isConnected = false;
         let microphonePermissionGranted = false;
+        let vad = null;
+        let vadReady = false;
+        let isSpeaking = false;
 
         const connectBtn = document.getElementById('connectBtn');
         const permissionBtn = document.getElementById('permissionBtn');
@@ -233,6 +252,27 @@
         const status = document.getElementById('status');
         const transcription = document.getElementById('transcription');
         const recordText = document.getElementById('recordText');
+
+        // 🧠 VAD MANAGER
+        async function initializeVAD() {
+            try {
+                console.log('🧠 Loading Silero VAD model...');
+                updateStatus('Loading VAD...', 'connecting');
+                
+                vad = await window.sileroVAD.createVAD({
+                    modelURL: 'https://cdn.jsdelivr.net/npm/@silero/vad@latest/dist/silero_vad.onnx',
+                    modelFetch: fetch,
+                });
+                vadReady = true;
+                console.log('✅ VAD model loaded and ready');
+                updateStatus('VAD Ready', 'vad-ready');
+                return true;
+            } catch (error) {
+                console.error(`❌ VAD initialization failed: ${error.message}`);
+                updateStatus('VAD Failed', 'disconnected');
+                return false;
+            }
+        }
 
         // Check if we're on a secure connection (required for microphone access)
         function checkSecureConnection() {
@@ -259,6 +299,13 @@
             // Initialize audio context (requires user gesture on iOS)
             console.log('Initializing audio context...');
             await initializeAudio();
+
+            // Initialize VAD
+            console.log('Initializing VAD...');
+            const vadSuccess = await initializeVAD();
+            if (!vadSuccess) {
+                updateTranscription('⚠️ VAD initialization failed. Voice activity detection will be limited.', true);
+            }
 
             // Check microphone permission first
             await checkInitialPermissions();
@@ -306,6 +353,10 @@
             
             // Stop any currently playing audio
             stopAllAudio();
+            
+            // Reset VAD state
+            isSpeaking = false;
+            vadReady = false;
         }
 
         function handleWebSocketMessage(data) {
@@ -533,8 +584,6 @@
             console.log('Stopped all audio and cleared queue');
         }
 
-
-
         async function checkMicrophonePermission() {
             try {
                 if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
@@ -627,6 +676,7 @@
 
         let audioWorkletNode = null;
         let recordingStream = null;
+        let vadContext = null;
 
         async function startRecording() {
             try {
@@ -645,10 +695,10 @@
                     return;
                 }
 
-                // Get audio stream with proper format for OpenAI Realtime API
+                // Get audio stream with proper format for VAD (16kHz) and OpenAI (24kHz conversion)
                 recordingStream = await navigator.mediaDevices.getUserMedia({
                     audio: {
-                        sampleRate: 24000,  // OpenAI requires 24kHz
+                        sampleRate: 16000,  // VAD works best with 16kHz
                         channelCount: 1,    // Mono
                         echoCancellation: true,
                         noiseSuppression: true,
@@ -656,23 +706,55 @@
                     }
                 });
 
-                // Use Web Audio API to get raw PCM data
-                const audioCtx = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 24000 });
-                const source = audioCtx.createMediaStreamSource(recordingStream);
+                // Create separate audio contexts for VAD (16kHz) and OpenAI (24kHz)
+                vadContext = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 16000 });
+                const source = vadContext.createMediaStreamSource(recordingStream);
                 
-                // Create a script processor to capture raw audio data
-                const processor = audioCtx.createScriptProcessor(2048, 1, 1);
+                // Create a script processor for VAD processing
+                const processor = vadContext.createScriptProcessor(4096, 1, 1);
                 
-                processor.onaudioprocess = (event) => {
-                    if (ws && ws.readyState === WebSocket.OPEN && isRecording) {
-                        const inputBuffer = event.inputBuffer;
-                        const inputData = inputBuffer.getChannelData(0); // Get mono channel
+                processor.onaudioprocess = async (event) => {
+                    if (!isRecording || !ws || ws.readyState !== WebSocket.OPEN) return;
+                    
+                    const inputBuffer = event.inputBuffer;
+                    const audioData = inputBuffer.getChannelData(0);
+                    
+                    // 🎤 VAD CHECK - Only send if speech detected
+                    let shouldSendAudio = true;
+                    if (vadReady && vad) {
+                        try {
+                            const speechProbability = await vad(audioData);
+                            const isCurrentlySpeaking = speechProbability > 0.5; // Threshold
+                            
+                            if (isCurrentlySpeaking !== isSpeaking) {
+                                isSpeaking = isCurrentlySpeaking;
+                                if (isSpeaking) {
+                                    console.log('🗣️ Speech detected (VAD)');
+                                    updateStatus('Speaking...', 'speaking');
+                                } else {
+                                    console.log('🤫 Speech ended (VAD)');
+                                    updateStatus('Recording...', 'recording');
+                                }
+                            }
+                            
+                            shouldSendAudio = isSpeaking;
+                        } catch (vadError) {
+                            console.warn('VAD processing error:', vadError);
+                            // Continue without VAD filtering
+                            shouldSendAudio = true;
+                        }
+                    }
+                    
+                    // Only send audio when VAD detects speech (or VAD is disabled)
+                    if (shouldSendAudio) {
+                        // Resample from 16kHz to 24kHz for OpenAI compatibility
+                        const resampledData = resampleAudio(audioData, 16000, 24000);
                         
                         // Convert float32 to int16 (PCM16)
-                        const pcmData = new Int16Array(inputData.length);
-                        for (let i = 0; i < inputData.length; i++) {
+                        const pcmData = new Int16Array(resampledData.length);
+                        for (let i = 0; i < resampledData.length; i++) {
                             // Convert from -1,1 float to -32768,32767 int16
-                            pcmData[i] = Math.max(-32768, Math.min(32767, inputData[i] * 32767));
+                            pcmData[i] = Math.max(-32768, Math.min(32767, resampledData[i] * 32767));
                         }
                         
                         // Convert to base64
@@ -688,19 +770,44 @@
                 };
                 
                 source.connect(processor);
-                processor.connect(audioCtx.destination);
+                processor.connect(vadContext.destination);
                 
                 audioWorkletNode = processor;
                 isRecording = true;
                 updateStatus('Recording...', 'recording');
                 updateUI();
                 
-                console.log('Started recording with PCM16 at 24kHz');
+                console.log('Started recording with VAD-enabled PCM16 processing');
                 
             } catch (error) {
                 console.error('Error starting recording:', error);
                 handleMicrophoneError(error);
             }
+        }
+
+        // Simple audio resampling function
+        function resampleAudio(inputBuffer, inputSampleRate, outputSampleRate) {
+            if (inputSampleRate === outputSampleRate) {
+                return inputBuffer;
+            }
+            
+            const ratio = outputSampleRate / inputSampleRate;
+            const outputLength = Math.round(inputBuffer.length * ratio);
+            const outputBuffer = new Float32Array(outputLength);
+            
+            for (let i = 0; i < outputLength; i++) {
+                const inputIndex = i / ratio;
+                const index = Math.floor(inputIndex);
+                const fraction = inputIndex - index;
+                
+                if (index + 1 < inputBuffer.length) {
+                    outputBuffer[i] = inputBuffer[index] * (1 - fraction) + inputBuffer[index + 1] * fraction;
+                } else {
+                    outputBuffer[i] = inputBuffer[index];
+                }
+            }
+            
+            return outputBuffer;
         }
 
         function stopRecording() {
@@ -713,16 +820,25 @@
                     audioWorkletNode = null;
                 }
                 
+                // Clean up VAD context
+                if (vadContext) {
+                    vadContext.close();
+                    vadContext = null;
+                }
+                
                 // Stop the recording stream
                 if (recordingStream) {
                     recordingStream.getTracks().forEach(track => track.stop());
                     recordingStream = null;
                 }
                 
+                // Reset VAD state
+                isSpeaking = false;
+                
                 updateStatus('Connected', 'connected');
                 updateUI();
                 
-                console.log('Stopped recording');
+                console.log('Stopped recording and cleaned up VAD resources');
             }
         }
 
@@ -791,10 +907,20 @@
             
             if (isRecording) {
                 recordBtn.classList.add('recording');
-                recordText.textContent = 'Recording...';
+                if (isSpeaking) {
+                    recordText.textContent = 'Speaking...';
+                } else {
+                    recordText.textContent = vadReady ? 'Listening...' : 'Recording...';
+                }
             } else {
                 recordBtn.classList.remove('recording');
-                recordText.textContent = microphonePermissionGranted ? 'Hold to Talk' : 'Permission Required';
+                if (!microphonePermissionGranted) {
+                    recordText.textContent = 'Permission Required';
+                } else if (!vadReady && isConnected) {
+                    recordText.textContent = 'Hold to Talk (no VAD)';
+                } else {
+                    recordText.textContent = 'Hold to Talk';
+                }
             }
         }
 

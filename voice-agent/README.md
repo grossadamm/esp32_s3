@@ -1,20 +1,37 @@
 # Voice Agent - AI Finance Assistant
 
-Voice-enabled finance assistant with adaptive speech recognition, GPU acceleration, and MCP integration. Processes both text and audio inputs for comprehensive financial analysis with optimized responses for spoken delivery.
+Voice-enabled finance assistant with real-time streaming audio, adaptive speech recognition, GPU acceleration, and MCP integration. Supports both traditional file-based audio processing and real-time speech-to-speech conversations via OpenAI's Realtime API.
 
 ## Features ✨
 
+- **Real-time Speech-to-Speech**: OpenAI Realtime API for instant voice conversations via WebSocket
 - **Adaptive Speech-to-Text**: GPU-aware audio processing with cloud fallback using AdaptiveSTTService
 - **Verbal Response Optimization**: LLM responses optimized for spoken delivery vs text consumption
 - **Unified Audio Processing**: Complete audio-to-audio pipeline with TTS generation
+- **Live Audio Streaming**: WebSocket-based streaming with real-time transcription and response
 - **Text Processing**: Direct text queries with detailed formatting for financial AI assistant
-- **MCP Integration**: Dynamic tool discovery from finance MCP server
+- **MCP Integration**: Dynamic tool discovery from finance MCP server with real-time execution
 - **Multi-LLM Support**: OpenAI GPT-4 and Anthropic Claude providers with context switching
 - **GPU Acceleration**: NVIDIA hardware detection and optimization for 60-80% faster processing
 - **Standardized Error Handling**: Consistent error responses with proper HTTP status codes
-- **Financial Tools**: House affordability, retirement planning, expense analysis
+- **Financial Tools**: House affordability, retirement planning, expense analysis with live interaction
 
 ## API Endpoints
+
+### Real-time Audio Streaming 🎙️ **NEW**
+```
+WebSocket: ws://localhost:3000/api/audio/realtime
+```
+Real-time speech-to-speech conversation via WebSocket with instant audio streaming.
+
+**Features:**
+- Live bidirectional audio streaming
+- Real-time transcription display
+- Voice activity detection
+- MCP tool integration during conversation
+- Support for interruptions and natural conversation flow
+
+**Test Client:** Open `test-realtime-client.html` in browser for interactive testing.
 
 ### Health Check
 ```
@@ -148,9 +165,19 @@ npm run dev
 
 ## Architecture
 
-The voice agent uses an MCP client approach with adaptive processing:
+The voice agent supports multiple processing modes with MCP integration:
 
-### Audio Processing Flow
+### Real-time Audio Streaming Flow 🎙️ **NEW**
+1. **WebSocket Connection**: Client establishes persistent connection
+2. **Live Audio Input**: Continuous audio chunks streamed to OpenAI Realtime API
+3. **Real-time STT**: Instant transcription with live display
+4. **Tool Discovery**: MCP client fetches available tools from finance server
+5. **Function Calling**: OpenAI identifies required tools during conversation
+6. **Tool Execution**: MCP client executes financial analysis tools in real-time
+7. **Streaming Response**: OpenAI generates and streams audio response immediately
+8. **Live Playback**: Audio chunks played as they arrive for natural conversation
+
+### Traditional Audio Processing Flow
 1. **Audio Input**: Multer handles file uploads with format validation
 2. **Adaptive STT**: AdaptiveSTTService chooses GPU vs cloud processing
 3. **Tool Discovery**: MCP client fetches available tools from finance server
@@ -180,6 +207,20 @@ curl -X POST http://localhost:3000/api/text \
 curl -X POST http://localhost:3000/api/audio \
   -F "audio=@question.wav" \
   --output response.mp3
+```
+
+### Real-time Audio Testing 🎙️ **NEW**
+```bash
+# Open the interactive test client
+open test-realtime-client.html
+# Or navigate to: file:///path/to/voice-agent/test-realtime-client.html
+
+# Interactive Testing Steps:
+# 1. Click "Connect" to establish WebSocket connection
+# 2. Click "Start Recording" and grant microphone access
+# 3. Speak naturally: "What's my project status?" or "Show expenses"
+# 4. Watch live transcription and hear immediate audio responses
+# 5. Test tool integration with financial queries
 ```
 
 ### Check Hardware Capabilities

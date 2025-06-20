@@ -6,11 +6,16 @@ This project uses PM2 in Docker to manage multiple Node.js services concurrently
 
 The Docker setup runs 3 services:
 
-1. **Voice Agent** (Port 3000) - Main voice interface **[EXPOSED]**
+1. **Voice Agent** (Port 3000) - Main voice interface with WebSocket support **[EXPOSED]**
 2. **Finance MCP Server** (Port 3001) - Financial analysis tools **[INTERNAL]**
 3. **Finance HTTP Server** (Port 3003) - HTTP interface for finance tools **[INTERNAL]**
 
 Only the Voice Agent port (3000) is exposed externally for security. Internal services communicate within the container.
+
+**Voice Agent Features:**
+- HTTP endpoints: `/api/text`, `/api/audio` 
+- WebSocket endpoint: `/api/audio/realtime` for real-time audio streaming
+- Health checks and status endpoints
 
 ## Quick Start
 
@@ -66,6 +71,41 @@ All service logs are stored in the `./logs` directory and mounted as volumes:
 - `voice-agent.log`
 - `finance-mcp.log`
 - `finance-http.log`
+
+## Testing
+
+### Real-time Audio Testing 🎙️
+After starting the services, test the real-time audio functionality:
+
+```bash
+# Start services
+npm run docker:up
+
+# Open the interactive test client in browser
+open voice-agent/test-realtime-client.html
+# Or navigate to: http://localhost:3000/static/test-realtime-client.html (if served)
+
+# Test WebSocket connection
+# 1. Click "Connect" in the browser interface
+# 2. Click "Start Recording" and speak
+# 3. See live transcription and audio responses
+```
+
+### Traditional API Testing
+```bash
+# Test text endpoint
+curl -X POST http://localhost:3000/api/text \
+  -H "Content-Type: application/json" \
+  -d '{"text": "What are my expenses?"}'
+
+# Test audio endpoint  
+curl -X POST http://localhost:3000/api/audio \
+  -F "audio=@sample.wav" \
+  --output response.mp3
+
+# Health check
+curl http://localhost:3000/health
+```
 
 ## Health Checks
 

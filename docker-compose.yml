@@ -9,6 +9,7 @@ services:
       - OPENAI_API_KEY=${OPENAI_API_KEY}
       - NVIDIA_VISIBLE_DEVICES=all
       - CUDA_VISIBLE_DEVICES=all
+      - STT_PREFER_LOCAL=false
     volumes:
       - ./data:/data
       - ./logs:/app/logs

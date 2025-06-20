@@ -83,13 +83,15 @@ The application uses Docker Compose with **3 separate containers** for clean ser
 ## Features
 
 ### Voice Agent ✨ **ENHANCED**
+- **OpenAI Realtime API Integration**: True real-time speech-to-speech conversations with streaming audio via WebSocket
 - **Adaptive Speech-to-Text**: GPU-aware audio processing with cloud fallback using AdaptiveSTTService
 - **Verbal Response Optimization**: LLM responses optimized for spoken delivery with conversational patterns
 - **Text-to-Speech**: AI response generation with OpenAI TTS for hardware consumption
 - **Unified Audio Endpoint**: Single `/api/audio` endpoint for complete audio-to-audio pipeline
+- **Real-time Audio Streaming**: WebSocket-based streaming audio for instant voice interactions
 - **Text Processing**: Direct text input processing with detailed formatting
 - **Multi-LLM Support**: Claude 3.5 Sonnet and GPT-4 support with verbal/text context switching
-- **MCP Integration**: Tool calling via Model Context Protocol
+- **MCP Integration**: Tool calling via Model Context Protocol with real-time execution
 - **Standardized Error Handling**: Consistent error responses with proper HTTP status codes and structured logging
 - **RESTful API**: Express.js server with comprehensive audio and text endpoints
 
@@ -111,6 +113,35 @@ The application uses Docker Compose with **3 separate containers** for clean ser
 - **MCP Integration**: Project tools available via MCP protocol
 
 ## New Features ✨
+
+### OpenAI Realtime API Integration 🎙️ **NEW**
+The voice agent now supports **true real-time speech-to-speech conversations** via OpenAI's Realtime API:
+
+**Real-time Streaming Features:**
+- **WebSocket Audio Streaming**: Continuous bidirectional audio streaming
+- **Live Transcription**: Real-time text transcription as you speak
+- **Instant Response**: Sub-second response times for natural conversation
+- **Voice Activity Detection**: Automatic speech start/stop detection
+- **Interruption Support**: Natural conversation flow with interruptions
+- **MCP Tool Integration**: Real-time tool execution during conversation
+
+**Streaming Architecture:**
+```
+User Voice → [WebSocket Stream] → OpenAI Realtime API → [Live Function Calls] → MCP Tools → [Streaming Response] → Speaker
+    ↑                                                                                           ↓
+Live interruption support ←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←← Live audio playback
+```
+
+**Endpoints:**
+- **WebSocket**: `ws://localhost:3000/api/audio/realtime` - Real-time streaming audio
+- **HTTP**: `POST /api/audio` - Traditional file-based audio processing
+- **Test Client**: `test-realtime-client.html` - Browser-based testing interface
+
+**Use Cases:**
+- **Voice Assistants**: Natural conversation with your financial data
+- **Live Analysis**: Real-time financial queries with immediate spoken responses
+- **Interactive Sessions**: Extended conversations with context retention
+- **Hardware Integration**: Perfect for ESP32, mobile apps, or voice devices
 
 ### Verbal Response Optimization
 The voice agent now automatically optimizes responses based on output format:
@@ -372,8 +403,47 @@ npm run start:dev-tools-mcp
 
 ### Voice Agent Server (Port 3000 - External Access)
 
+#### WebSocket /api/audio/realtime 🎙️ **NEW - REAL-TIME STREAMING**
+Real-time speech-to-speech conversation endpoint via WebSocket for instant voice interactions.
+
+**Connection:**
+- Protocol: WebSocket
+- URL: `ws://localhost:3000/api/audio/realtime`
+- Format: Real-time audio streaming with JSON control messages
+
+**Features:**
+- **Real-time Streaming**: Bidirectional audio streaming
+- **Live Transcription**: Real-time text as you speak
+- **Voice Activity Detection**: Automatic speech detection
+- **MCP Tool Integration**: Real-time tool execution
+- **Natural Conversation**: Support for interruptions and context
+
+**Usage:**
+```javascript
+// Connect to realtime audio WebSocket
+const ws = new WebSocket('ws://localhost:3000/api/audio/realtime');
+
+// Send audio chunks (base64 encoded PCM16 24kHz)
+ws.send(JSON.stringify({
+  type: 'audio_chunk',
+  audio: base64AudioData
+}));
+
+// Receive real-time responses
+ws.onmessage = (event) => {
+  const data = JSON.parse(event.data);
+  if (data.type === 'audio_delta') {
+    // Play audio chunk immediately
+    playAudioChunk(data.audio);
+  }
+};
+```
+
+**Test Client:**
+Open `voice-agent/test-realtime-client.html` in browser for interactive testing.
+
 #### POST /api/audio ✨ **ENHANCED - UNIFIED ENDPOINT**
-Main audio endpoint for complete audio-to-audio processing. Now the single, intelligent audio endpoint.
+Traditional audio endpoint for complete audio-to-audio processing. File-based alternative to real-time streaming.
 
 **Request:**
 - Method: POST  
@@ -528,6 +598,14 @@ Delete project by ID.
 # Start the services
 docker compose up -d --build
 
+# Test real-time audio streaming (interactive browser test)
+open voice-agent/test-realtime-client.html
+# Or navigate to: file:///path/to/voice-agent/test-realtime-client.html
+# 1. Click "Connect" to establish WebSocket connection
+# 2. Click "Start Recording" and speak naturally
+# 3. Receive live transcription and audio responses
+# 4. Test MCP tool integration: "What's my project status?" or "Show my expenses"
+
 # Test unified audio endpoint (returns optimized audio response)
 curl -X POST \
   -F "audio=@voice-agent/tests/audio/house-affordability.wav" \
@@ -555,6 +633,36 @@ curl http://localhost:3000/api/stt-status
 # Health check
 curl http://localhost:3000/health
 ```
+
+### Real-time Audio Testing 🎙️ **NEW**
+
+**Interactive Testing:**
+1. **Open Test Client**: Navigate to `voice-agent/test-realtime-client.html` in your browser
+2. **Connect**: Click "Connect" to establish WebSocket connection
+3. **Start Recording**: Click "Start Recording" and grant microphone access
+4. **Speak Naturally**: Ask questions like:
+   - "What's my current project status?"
+   - "How much did I spend on groceries last month?"
+   - "Can I afford a $400,000 house?"
+5. **Live Response**: See real-time transcription and hear immediate audio responses
+6. **Tool Integration**: Watch MCP tools execute in real-time with live results
+
+**Expected Flow:**
+```
+You: "What's my project status?"
+→ Live transcription appears instantly
+→ AI responds: "Let me check your current projects..."
+→ MCP tool executes: list_projects
+→ AI continues: "You have 3 active projects: Project Alpha created yesterday..."
+→ Audio streams back in real-time
+```
+
+**WebSocket Message Types:**
+- `session_ready`: Connection established
+- `speech_started`/`speech_stopped`: Voice activity detection
+- `transcript_delta`: Live transcription text
+- `audio_delta`: Streaming audio response chunks
+- `error`: Error messages and debugging info
 
 ### Sample Audio Test
 

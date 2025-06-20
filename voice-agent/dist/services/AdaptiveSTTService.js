@@ -13,7 +13,7 @@ export class AdaptiveSTTService {
             fallbackToCloud: true,
             confidenceThreshold: 0.7,
             maxRetries: 2,
-            preferLocal: true,
+            preferLocal: process.env.STT_PREFER_LOCAL !== 'false',
             ...config
         };
         this.openai = new OpenAI({
@@ -59,8 +59,8 @@ export class AdaptiveSTTService {
         while (attempt < this.config.maxRetries) {
             attempt++;
             try {
-                // Try local STT first if available
-                if (this.localSTT && this.config.preferLocal) {
+                // Choose STT order based on preference
+                if (this.config.preferLocal && this.localSTT) {
                     console.log(`🎙️ Attempting local STT (attempt ${attempt})`);
                     const result = await this.transcribeLocal(audioBuffer);
                     // Check confidence threshold
@@ -75,7 +75,7 @@ export class AdaptiveSTTService {
                         }
                     }
                 }
-                // Try cloud STT
+                // Try cloud STT (either as primary choice or fallback)
                 console.log(`☁️ Attempting cloud STT (attempt ${attempt})`);
                 const cloudResult = await this.transcribeCloud(audioBuffer);
                 const totalTime = Date.now() - startTime;

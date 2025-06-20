@@ -1,0 +1,1 @@
+{"version":3,"file":"realtime-audio.d.ts","sourceRoot":"","sources":["../../src/routes/realtime-audio.ts"],"names":[],"mappings":"AAKA,qBAAa,oBAAoB;IAC/B,OAAO,CAAC,GAAG,CAAmB;IAC9B,OAAO,CAAC,SAAS,CAAY;IAC7B,OAAO,CAAC,MAAM,CAAS;;IASjB,UAAU,CAAC,MAAM,EAAE,GAAG;YAsBd,wBAAwB;YAoIxB,kBAAkB;IAuC1B,KAAK;CAIZ"}

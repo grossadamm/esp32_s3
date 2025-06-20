@@ -1,0 +1,257 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Realtime Audio Test Client</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        .status {
+            padding: 10px;
+            border-radius: 5px;
+            margin: 10px 0;
+        }
+        .connected { background-color: #d4edda; color: #155724; }
+        .disconnected { background-color: #f8d7da; color: #721c24; }
+        .recording { background-color: #fff3cd; color: #856404; }
+        button {
+            padding: 10px 20px;
+            margin: 5px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+        .start { background-color: #28a745; color: white; }
+        .stop { background-color: #dc3545; color: white; }
+        .transcript {
+            background-color: #f8f9fa;
+            border: 1px solid #dee2e6;
+            border-radius: 5px;
+            padding: 15px;
+            margin: 10px 0;
+            min-height: 100px;
+            white-space: pre-wrap;
+        }
+        .log {
+            background-color: #f1f3f4;
+            border-radius: 5px;
+            padding: 10px;
+            margin: 10px 0;
+            max-height: 300px;
+            overflow-y: auto;
+            font-family: monospace;
+            font-size: 12px;
+        }
+    </style>
+</head>
+<body>
+    <h1>🎙️ Realtime Audio Test Client</h1>
+    
+    <div id="status" class="status disconnected">
+        Disconnected
+    </div>
+    
+    <div>
+        <button id="connectBtn" class="start" onclick="connect()">Connect</button>
+        <button id="disconnectBtn" class="stop" onclick="disconnect()" disabled>Disconnect</button>
+        <button id="recordBtn" class="start" onclick="startRecording()" disabled>Start Recording</button>
+        <button id="stopBtn" class="stop" onclick="stopRecording()" disabled>Stop Recording</button>
+    </div>
+    
+    <h3>Live Transcript:</h3>
+    <div id="transcript" class="transcript"></div>
+    
+    <h3>Connection Log:</h3>
+    <div id="log" class="log"></div>
+
+    <script>
+        let ws = null;
+        let mediaRecorder = null;
+        let audioContext = null;
+        let audioQueue = [];
+        
+        function log(message) {
+            const logDiv = document.getElementById('log');
+            const timestamp = new Date().toLocaleTimeString();
+            logDiv.innerHTML += `[${timestamp}] ${message}\n`;
+            logDiv.scrollTop = logDiv.scrollHeight;
+        }
+        
+        function updateStatus(text, className) {
+            const statusDiv = document.getElementById('status');
+            statusDiv.textContent = text;
+            statusDiv.className = `status ${className}`;
+        }
+        
+        function connect() {
+            try {
+                ws = new WebSocket('ws://localhost:3000/api/audio/realtime');
+                
+                ws.onopen = () => {
+                    log('✅ Connected to WebSocket');
+                    updateStatus('Connected', 'connected');
+                    document.getElementById('connectBtn').disabled = true;
+                    document.getElementById('disconnectBtn').disabled = false;
+                    document.getElementById('recordBtn').disabled = false;
+                };
+                
+                ws.onmessage = (event) => {
+                    try {
+                        const data = JSON.parse(event.data);
+                        log(`📨 Received: ${data.type}`);
+                        
+                        switch (data.type) {
+                            case 'session_ready':
+                                log('🎯 Session ready');
+                                break;
+                            case 'audio_delta':
+                                // Play audio chunk (base64 encoded)
+                                playAudioChunk(data.audio);
+                                break;
+                            case 'transcript_delta':
+                                // Update live transcript
+                                updateTranscript(data.text);
+                                break;
+                            case 'speech_started':
+                                log('🎤 Speech detected');
+                                updateStatus('Listening...', 'recording');
+                                break;
+                            case 'speech_stopped':
+                                log('🔇 Speech ended');
+                                updateStatus('Connected', 'connected');
+                                break;
+                            case 'error':
+                                log(`❌ Error: ${JSON.stringify(data.error)}`);
+                                break;
+                        }
+                    } catch (e) {
+                        log(`❌ Failed to parse message: ${e.message}`);
+                    }
+                };
+                
+                ws.onclose = () => {
+                    log('🔌 WebSocket closed');
+                    updateStatus('Disconnected', 'disconnected');
+                    resetButtons();
+                };
+                
+                ws.onerror = (error) => {
+                    log(`❌ WebSocket error: ${error}`);
+                    updateStatus('Error', 'disconnected');
+                    resetButtons();
+                };
+                
+            } catch (error) {
+                log(`❌ Connection failed: ${error.message}`);
+            }
+        }
+        
+        function disconnect() {
+            if (ws) {
+                ws.close();
+            }
+            if (mediaRecorder && mediaRecorder.state === 'recording') {
+                stopRecording();
+            }
+        }
+        
+        function resetButtons() {
+            document.getElementById('connectBtn').disabled = false;
+            document.getElementById('disconnectBtn').disabled = true;
+            document.getElementById('recordBtn').disabled = true;
+            document.getElementById('stopBtn').disabled = true;
+        }
+        
+        async function startRecording() {
+            try {
+                // Get microphone access
+                const stream = await navigator.mediaDevices.getUserMedia({ 
+                    audio: {
+                        sampleRate: 24000,
+                        channelCount: 1,
+                        echoCancellation: true,
+                        noiseSuppression: true
+                    }
+                });
+                
+                // Create audio context for processing
+                audioContext = new AudioContext({ sampleRate: 24000 });
+                const source = audioContext.createMediaStreamSource(stream);
+                
+                // Use MediaRecorder for simplicity (will need conversion for production)
+                mediaRecorder = new MediaRecorder(stream, {
+                    mimeType: 'audio/webm;codecs=opus'
+                });
+                
+                mediaRecorder.ondataavailable = (event) => {
+                    if (event.data.size > 0 && ws && ws.readyState === WebSocket.OPEN) {
+                        // Convert blob to base64 and send
+                        const reader = new FileReader();
+                        reader.onload = () => {
+                            const base64 = reader.result.split(',')[1];
+                            ws.send(JSON.stringify({
+                                type: 'audio_chunk',
+                                audio: base64
+                            }));
+                        };
+                        reader.readAsDataURL(event.data);
+                    }
+                };
+                
+                mediaRecorder.start(100); // Send chunks every 100ms
+                
+                log('🎤 Recording started');
+                updateStatus('Recording...', 'recording');
+                document.getElementById('recordBtn').disabled = true;
+                document.getElementById('stopBtn').disabled = false;
+                
+            } catch (error) {
+                log(`❌ Recording failed: ${error.message}`);
+            }
+        }
+        
+        function stopRecording() {
+            if (mediaRecorder && mediaRecorder.state === 'recording') {
+                mediaRecorder.stop();
+                log('🛑 Recording stopped');
+                updateStatus('Connected', 'connected');
+                document.getElementById('recordBtn').disabled = false;
+                document.getElementById('stopBtn').disabled = true;
+            }
+        }
+        
+        function updateTranscript(text) {
+            const transcriptDiv = document.getElementById('transcript');
+            transcriptDiv.textContent += text;
+            transcriptDiv.scrollTop = transcriptDiv.scrollHeight;
+        }
+        
+        function playAudioChunk(base64Audio) {
+            try {
+                // Simple audio playback (for testing)
+                const audioData = atob(base64Audio);
+                const arrayBuffer = new ArrayBuffer(audioData.length);
+                const view = new Uint8Array(arrayBuffer);
+                for (let i = 0; i < audioData.length; i++) {
+                    view[i] = audioData.charCodeAt(i);
+                }
+                
+                // Note: This is simplified. Production would need proper audio decoding
+                log(`🔊 Received ${arrayBuffer.byteLength} bytes of audio`);
+            } catch (error) {
+                log(`❌ Audio playback error: ${error.message}`);
+            }
+        }
+        
+        // Auto-connect on page load for testing
+        window.onload = () => {
+            log('🚀 Page loaded, ready to connect');
+        };
+    </script>
+</body>
+</html> 

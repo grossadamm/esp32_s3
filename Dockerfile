@@ -31,21 +31,11 @@ RUN npm ci
 # Copy source code
 COPY . .
 
-# Hardware detection and conditional GPU setup
-RUN echo "Detecting hardware capabilities..." && \
-    if command -v nvidia-smi >/dev/null 2>&1; then \
-        echo "✅ NVIDIA GPU detected - installing GPU-optimized packages"; \
-        # Install GPU-optimized packages
-        pip3 install --no-cache-dir torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu118 || \
-        pip3 install --no-cache-dir torch torchvision torchaudio; \
-        pip3 install --no-cache-dir openai-whisper transformers; \
-        pip3 install --no-cache-dir onnxruntime-gpu || pip3 install --no-cache-dir onnxruntime; \
-    else \
-        echo "ℹ️  No NVIDIA GPU detected - using CPU-only packages"; \
-        pip3 install --no-cache-dir torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cpu; \
-        pip3 install --no-cache-dir openai-whisper transformers; \
-        pip3 install --no-cache-dir onnxruntime; \
-    fi
+# Install GPU-capable packages (detection happens at runtime)
+RUN echo "Installing GPU-capable ML packages for Jetson deployment..." && \
+    pip3 install --no-cache-dir torch torchvision torchaudio && \
+    pip3 install --no-cache-dir openai-whisper transformers && \
+    pip3 install --no-cache-dir onnxruntime || echo "onnxruntime-gpu not available, continuing with CPU version"
 
 # Build all TypeScript projects to ensure fresh compilation
 RUN echo "Building TypeScript projects..." && \

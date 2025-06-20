@@ -3,8 +3,10 @@ import cors from 'cors';
 import dotenv from 'dotenv';
 import fs from 'fs';
 import path from 'path';
+import { createServer } from 'http';
 import { textRouter } from './routes/text.js';
 import { audioRouter } from './routes/audio.js';
+import { RealtimeAudioService } from './routes/realtime-audio.js';
 import { FileCleanupService } from './services/FileCleanupService.js';
 import { HardwareDetectionService } from './services/HardwareDetectionService.js';
 import { AdaptiveSTTService } from './services/AdaptiveSTTService.js';
@@ -12,7 +14,10 @@ import { createSystemError } from './utils/errorUtils.js';
 import { logError, logInfo, logWarning } from './utils/logger.js';
 dotenv.config();
 const app = express();
+const server = createServer(app);
 const port = process.env.PORT || 3000;
+// Initialize Realtime Audio Service
+const realtimeAudioService = new RealtimeAudioService();
 // Clean uploads directory at startup
 FileCleanupService.cleanupUploadsDirectory();
 // Ensure uploads directory exists
@@ -82,13 +87,16 @@ async function initializeServices() {
         logInfo('Service Initialization', 'Continuing with available services...');
     }
 }
-app.listen(port, async () => {
+server.listen(port, async () => {
     console.log(`🤖 Voice Agent running on http://localhost:${port}`);
     console.log(`Health check: http://localhost:${port}/health`);
     console.log(`Hardware status: GET http://localhost:${port}/api/hardware-status`);
     console.log(`STT status: GET http://localhost:${port}/api/stt-status`);
     console.log(`Text endpoint: POST http://localhost:${port}/api/text`);
     console.log(`Audio endpoint: POST http://localhost:${port}/api/audio (returns audio)`);
+    console.log(`🎙️ Realtime Audio: WebSocket ws://localhost:${port}/api/audio/realtime`);
+    // Initialize realtime audio service
+    await realtimeAudioService.initialize(server);
     // Initialize services after server starts
     await initializeServices();
 });

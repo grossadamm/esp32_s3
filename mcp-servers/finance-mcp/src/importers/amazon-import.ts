@@ -53,6 +53,7 @@ export class SimpleAmazonImporter {
       refunds: { processed: number; imported: number };
       digital_orders: { processed: number; imported: number };
       digital_refunds: { processed: number; imported: number };
+      concessions: { processed: number; imported: number };
     };
     message: string;
   }> {
@@ -74,7 +75,8 @@ export class SimpleAmazonImporter {
       rentals: { processed: 0, imported: 0 },
       refunds: { processed: 0, imported: 0 },
       digital_orders: { processed: 0, imported: 0 },
-      digital_refunds: { processed: 0, imported: 0 }
+      digital_refunds: { processed: 0, imported: 0 },
+      concessions: { processed: 0, imported: 0 }
     };
 
     // Import orders
@@ -119,7 +121,12 @@ export class SimpleAmazonImporter {
     summary.digital_refunds = digitalRefundsResult;
     console.log(`  💳 Digital Refunds: ${digitalRefundsResult.imported}/${digitalRefundsResult.processed} imported`);
 
-    const totalImported = summary.orders.imported + summary.returns.imported + summary.rentals.imported + summary.refunds.imported + summary.digital_orders.imported + summary.digital_refunds.imported;
+    // Import concessions
+    const concessionsResult = await this.importConcessions(expandedPath);
+    summary.concessions = concessionsResult;
+    console.log(`  🎁 Concessions: ${concessionsResult.imported}/${concessionsResult.processed} imported`);
+
+    const totalImported = summary.orders.imported + summary.returns.imported + summary.rentals.imported + summary.refunds.imported + summary.digital_orders.imported + summary.digital_refunds.imported + summary.concessions.imported;
     
     console.log(`✅ Amazon import complete! Total imported: ${totalImported} transactions`);
     
@@ -238,6 +245,8 @@ export class SimpleAmazonImporter {
           return this.parseRefundRow(row);
         case 'digital_refund':
           return this.parseDigitalRefundRow(row);
+        case 'concession':
+          return this.parseConcessionRow(row);
         default:
           throw new Error(`Unknown transaction type: ${transactionType}`);
       }
@@ -628,6 +637,50 @@ export class SimpleAmazonImporter {
         condition_code: row.ConditionCode,
         currency: row.BaseCurrencyCode,
         monetary_component_type: row.MonetaryComponentType
+      })
+    };
+  }
+
+  async importConcessions(dataPath: string): Promise<{ processed: number; imported: number }> {
+    const concessionsPath = path.join(dataPath, 'Retail.Orders&Returns.Concessions', 'datasets', 'OrdersAndReturns.CSConcessions.Concessions', 'OrdersAndReturns.CSConcessions.Concessions.csv');
+    
+    if (!fs.existsSync(concessionsPath)) {
+      console.log('  🎁 Concessions file not found, skipping');
+      return { processed: 0, imported: 0 };
+    }
+
+    return await this.importFile(concessionsPath, 'concession');
+  }
+
+  private parseConcessionRow(row: any): AmazonTransaction {
+    // Handle BOM and dynamic key lookup like other parsers
+    const keys = Object.keys(row);
+    const orderIdKey = keys.find(key => key.includes('order id')) || 'order id';
+    const replacementIdKey = keys.find(key => key.includes('replacement order id')) || 'replacement order id';
+    
+    const originalOrderId = row[orderIdKey];
+    const replacementOrderId = row[replacementIdKey];
+    
+    if (!originalOrderId) {
+      throw new Error('Missing required order id');
+    }
+
+    const isReplacement = replacementOrderId && replacementOrderId !== 'No Replacement Order ID';
+    const transactionId = isReplacement 
+      ? `concession_${originalOrderId}_${replacementOrderId}` 
+      : `concession_${originalOrderId}_${Date.now()}`;
+
+    return {
+      transaction_id: transactionId,
+      transaction_type: 'concession',
+      date: new Date().toISOString().split('T')[0], // No date in concessions CSV
+      status: isReplacement ? 'Replacement Sent' : 'Credit/Refund',
+      product_name: `Concession: ${isReplacement ? 'Replacement Order' : 'Account Credit'}`,
+      amount: 0, // No direct financial impact to customer
+      details: JSON.stringify({
+        original_order_id: originalOrderId,
+        replacement_order_id: isReplacement ? replacementOrderId : null,
+        concession_type: isReplacement ? 'replacement' : 'credit_refund'
       })
     };
   }

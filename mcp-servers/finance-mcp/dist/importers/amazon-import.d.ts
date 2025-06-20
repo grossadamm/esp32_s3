@@ -37,6 +37,10 @@ export declare class SimpleAmazonImporter {
                 processed: number;
                 imported: number;
             };
+            concessions: {
+                processed: number;
+                imported: number;
+            };
         };
         message: string;
     }>;
@@ -70,6 +74,11 @@ export declare class SimpleAmazonImporter {
     }>;
     private parseDigitalMonetaryRow;
     private parseDigitalRefundRow;
+    importConcessions(dataPath: string): Promise<{
+        processed: number;
+        imported: number;
+    }>;
+    private parseConcessionRow;
     clearTables(): Promise<void>;
     close(): void;
 }

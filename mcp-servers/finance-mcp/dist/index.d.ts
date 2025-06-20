@@ -78,6 +78,10 @@ export declare class FinanceService {
                 processed: number;
                 imported: number;
             };
+            concessions: {
+                processed: number;
+                imported: number;
+            };
         };
         message: string;
     }>;

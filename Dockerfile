@@ -1,13 +1,18 @@
 # Multi-stage build with GPU support detection
-FROM node:20-alpine AS base
+FROM ubuntu:22.04 AS base
 
-# Install system dependencies for GPU detection
-RUN apk add --no-cache \
+# Install system dependencies and Node.js
+RUN apt-get update && apt-get install -y \
     curl \
     bash \
     python3 \
-    py3-pip \
-    build-base
+    python3-pip \
+    build-essential \
+    ca-certificates \
+    && curl -fsSL https://deb.nodesource.com/setup_20.x | bash - \
+    && apt-get install -y nodejs \
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/*
 
 # Install PM2 and tsx globally
 RUN npm install -g pm2 tsx
@@ -31,15 +36,15 @@ RUN echo "Detecting hardware capabilities..." && \
     if command -v nvidia-smi >/dev/null 2>&1; then \
         echo "✅ NVIDIA GPU detected - installing GPU-optimized packages"; \
         # Install GPU-optimized packages
-        pip3 install --break-system-packages --no-cache-dir torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu118 || \
-        pip3 install --break-system-packages --no-cache-dir torch torchvision torchaudio; \
-        pip3 install --break-system-packages --no-cache-dir openai-whisper transformers; \
-        pip3 install --break-system-packages --no-cache-dir onnxruntime-gpu || pip3 install --break-system-packages --no-cache-dir onnxruntime; \
+        pip3 install --no-cache-dir torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu118 || \
+        pip3 install --no-cache-dir torch torchvision torchaudio; \
+        pip3 install --no-cache-dir openai-whisper transformers; \
+        pip3 install --no-cache-dir onnxruntime-gpu || pip3 install --no-cache-dir onnxruntime; \
     else \
         echo "ℹ️  No NVIDIA GPU detected - using CPU-only packages"; \
-        pip3 install --break-system-packages --no-cache-dir torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cpu; \
-        pip3 install --break-system-packages --no-cache-dir openai-whisper transformers; \
-        pip3 install --break-system-packages --no-cache-dir onnxruntime; \
+        pip3 install --no-cache-dir torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cpu; \
+        pip3 install --no-cache-dir openai-whisper transformers; \
+        pip3 install --no-cache-dir onnxruntime; \
     fi
 
 # Build all TypeScript projects to ensure fresh compilation

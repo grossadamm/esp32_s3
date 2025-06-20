@@ -104,7 +104,7 @@ router.post('/', upload.single('audio'), async (req: Request, res: Response) => 
     try {
       llmProvider = LLMFactory.create();
       tools = await mcpClient.getAvailableTools();
-      result = await llmProvider.processText(transcription, tools);
+      result = await llmProvider.processText(transcription, tools, true); // true for verbal response
     } catch (llmError) {
       console.error('LLM processing error:', llmError);
       throw new Error(`LLM processing failed: ${llmError instanceof Error ? llmError.message : 'Unknown error'}`);

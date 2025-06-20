@@ -23,18 +23,34 @@ export class OpenAIService implements LLMProvider {
     this.mcpClient = new MCPClient();
   }
 
-  async processText(text: string, tools: Tool[]): Promise<LLMResponse> {
+  async processText(text: string, tools: Tool[], isVerbalResponse: boolean = false): Promise<LLMResponse> {
     try {
       const model = process.env.OPENAI_MODEL || 'gpt-4-turbo-preview';
       
       // Convert tools to OpenAI format
       const openAITools = this.convertToOpenAITools(tools);
       
+      const basePrompt = `You are a personal finance assistant. You have access to tools that can query a comprehensive finance system. Answer this query: ${text}`;
+      
+      const verbalContextPrompt = `You are a personal finance assistant providing VERBAL responses that will be spoken aloud to the user. 
+
+IMPORTANT: Your response will be converted to speech, so:
+- Keep responses concise and conversational, typically 1-3 sentences for simple queries
+- Use natural, spoken language patterns (avoid bullet points, lists, or complex formatting)
+- For quick facts or simple questions, be brief and direct
+- Provide longer explanations (2-4 sentences) only when:
+  * The user explicitly asks for detailed analysis or explanation
+  * Complex financial concepts need clarification
+  * Multiple factors need to be considered for decision-making
+  * The user asks "why" or "how" questions that require context
+
+You have access to tools that can query a comprehensive finance system. Answer this query: ${text}`;
+      
       const response = await this.openai.chat.completions.create({
         model,
         messages: [{
           role: "user",
-          content: `You are a personal finance assistant. You have access to tools that can query a comprehensive finance system. Answer this query: ${text}`
+          content: isVerbalResponse ? verbalContextPrompt : basePrompt
         }],
         tools: openAITools,
         tool_choice: "auto"
@@ -69,13 +85,29 @@ export class OpenAIService implements LLMProvider {
           }
         }
 
+        const baseFinalPrompt = `You are a personal finance assistant. Based on the tool results, provide a clear response to: ${text}`;
+
+        const finalVerbalContextPrompt = `You are a personal finance assistant providing VERBAL responses that will be spoken aloud to the user.
+
+IMPORTANT: Your response will be converted to speech, so:
+- Keep responses concise and conversational, typically 1-3 sentences for simple queries
+- Use natural, spoken language patterns (avoid bullet points, lists, or complex formatting)
+- For quick facts or simple questions, be brief and direct
+- Provide longer explanations (2-4 sentences) only when:
+  * The user explicitly asks for detailed analysis or explanation
+  * Complex financial concepts need clarification
+  * Multiple factors need to be considered for decision-making
+  * The user asks "why" or "how" questions that require context
+
+Based on the tool results, provide a clear, spoken response to: ${text}`;
+
         // Send results back to OpenAI for final response
         const finalResponseMessage = await this.openai.chat.completions.create({
           model,
           messages: [
             {
               role: "user",
-              content: `You are a personal finance assistant. Answer this query: ${text}`
+              content: isVerbalResponse ? finalVerbalContextPrompt : baseFinalPrompt
             },
             response.choices[0].message,
             ...toolResults

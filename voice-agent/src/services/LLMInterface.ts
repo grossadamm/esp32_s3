@@ -14,6 +14,6 @@ interface Tool {
 }
 
 export interface LLMProvider {
-  processText(text: string, tools: Tool[]): Promise<LLMResponse>;
+  processText(text: string, tools: Tool[], isVerbalResponse?: boolean): Promise<LLMResponse>;
   getModelName(): string;
 } 

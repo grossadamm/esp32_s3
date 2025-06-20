@@ -23,18 +23,34 @@ export class ClaudeService implements LLMProvider {
     this.mcpClient = new MCPClient();
   }
 
-  async processText(text: string, tools: Tool[]): Promise<LLMResponse> {
+  async processText(text: string, tools: Tool[], isVerbalResponse: boolean = false): Promise<LLMResponse> {
     try {
       // Get available tools from finance system
       const availableTools = await this.mcpClient.getAvailableTools();
       
+      const basePrompt = `You are a personal finance assistant. You have access to tools that can query a comprehensive finance system. Answer this query: ${text}`;
+      
+      const verbalContextPrompt = `You are a personal finance assistant providing VERBAL responses that will be spoken aloud to the user. 
+
+IMPORTANT: Your response will be converted to speech, so:
+- Keep responses concise and conversational, typically 1-3 sentences for simple queries
+- Use natural, spoken language patterns (avoid bullet points, lists, or complex formatting)
+- For quick facts or simple questions, be brief and direct
+- Provide longer explanations (2-4 sentences) only when:
+  * The user explicitly asks for detailed analysis or explanation
+  * Complex financial concepts need clarification
+  * Multiple factors need to be considered for decision-making
+  * The user asks "why" or "how" questions that require context
+
+You have access to tools that can query a comprehensive finance system. Answer this query: ${text}`;
+
       // Send to Claude with tools
       const response = await this.anthropic.messages.create({
         model: "claude-3-5-sonnet-20241022",
         max_tokens: 1000,
         messages: [{
           role: "user",
-          content: `You are a personal finance assistant. You have access to tools that can query a comprehensive finance system. Answer this query: ${text}`
+          content: isVerbalResponse ? verbalContextPrompt : basePrompt
         }],
         tools: availableTools.map(tool => ({
           name: tool.name,
@@ -77,6 +93,22 @@ export class ClaudeService implements LLMProvider {
           }
         }
 
+        const baseFinalPrompt = `You are a personal finance assistant. Based on the tool results, provide a clear response to: ${text}`;
+        
+        const finalVerbalContextPrompt = `You are a personal finance assistant providing VERBAL responses that will be spoken aloud to the user.
+
+IMPORTANT: Your response will be converted to speech, so:
+- Keep responses concise and conversational, typically 1-3 sentences for simple queries
+- Use natural, spoken language patterns (avoid bullet points, lists, or complex formatting)
+- For quick facts or simple questions, be brief and direct
+- Provide longer explanations (2-4 sentences) only when:
+  * The user explicitly asks for detailed analysis or explanation
+  * Complex financial concepts need clarification
+  * Multiple factors need to be considered for decision-making
+  * The user asks "why" or "how" questions that require context
+
+Based on the tool results, provide a clear, spoken response to: ${text}`;
+
         // Send results back to Claude for final response
         const finalResponseMessage = await this.anthropic.messages.create({
           model: "claude-3-5-sonnet-20241022",
@@ -84,7 +116,7 @@ export class ClaudeService implements LLMProvider {
           messages: [
             {
               role: "user",
-              content: `You are a personal finance assistant. Answer this query: ${text}`
+              content: isVerbalResponse ? finalVerbalContextPrompt : baseFinalPrompt
             },
             {
               role: "assistant",

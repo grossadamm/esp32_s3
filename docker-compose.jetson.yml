@@ -1,0 +1,120 @@
+services:
+  voice-agent:
+    build:
+      context: .
+      dockerfile: Dockerfile.jetson
+    restart: unless-stopped
+    environment:
+      - NODE_ENV=production
+      - LLM_PROVIDER=openai
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - STT_PREFER_LOCAL=true
+      - NVIDIA_VISIBLE_DEVICES=all
+      - CUDA_VISIBLE_DEVICES=all
+    volumes:
+      - ./data:/app/data
+      - ./logs:/app/logs
+      - ./uploads:/app/uploads
+    networks:
+      - mcp-network
+    ports:
+      - "3000:3000"
+    # GPU access for Jetson
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu, compute, utility]
+    runtime: nvidia
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    depends_on:
+      - finance-api
+      - dev-tools-api
+
+  finance-api:
+    build:
+      context: .
+      dockerfile: Dockerfile.jetson
+    restart: unless-stopped
+    environment:
+      - NODE_ENV=production
+      - PORT=3001
+    volumes:
+      - ./data:/app/data
+      - ./logs:/app/logs
+    networks:
+      - mcp-network
+    ports:
+      - "3001:3001"
+    command: ["node", "mcp-servers/finance-mcp/dist/http-server.js"]
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3001/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+  dev-tools-api:
+    build:
+      context: .
+      dockerfile: Dockerfile.jetson
+    restart: unless-stopped
+    environment:
+      - NODE_ENV=production
+      - PORT=3002
+    volumes:
+      - ./data:/app/data
+      - ./logs:/app/logs
+    networks:
+      - mcp-network
+    ports:
+      - "3002:3002"
+    command: ["node", "mcp-servers/dev-tools-mcp/dist/http-server.js"]
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3002/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+  # Optional: Dedicated GPU Whisper service
+  whisper-gpu:
+    image: dustynv/whisper:r36.2.0
+    restart: unless-stopped
+    environment:
+      - NVIDIA_VISIBLE_DEVICES=all
+      - CUDA_VISIBLE_DEVICES=all
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu, compute, utility]
+    runtime: nvidia
+    networks:
+      - mcp-network
+    # Expose as a service for the voice agent to use
+    command: ["python3", "-m", "http.server", "8000"]
+    profiles:
+      - gpu-services  # Optional profile for dedicated GPU services
+
+networks:
+  mcp-network:
+    driver: bridge
+
+volumes:
+  data:
+    driver: local
+  logs:
+    driver: local
+  uploads:
+    driver: local 

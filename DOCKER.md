@@ -9,10 +9,10 @@ This project provides two Docker configurations:
 The Docker setup runs 3 services:
 
 1. **Voice Agent** (Port 3000) - Main voice interface with WebSocket support **[EXPOSED]**
-2. **Finance MCP Server** (Port 3001) - Financial analysis tools **[INTERNAL]**
-3. **Finance HTTP Server** (Port 3003) - HTTP interface for finance tools **[INTERNAL]**
+2. **Finance API** (Port 3000) - Financial analysis HTTP server **[INTERNAL]**
+3. **Dev Tools API** (Port 3000) - Development tools HTTP server **[INTERNAL]**
 
-Only the Voice Agent port (3000) is exposed externally for security. Internal services communicate within the container.
+Only the Voice Agent is accessible externally. All services use host networking mode, with internal services only accessible within the container network for security.
 
 **Voice Agent Features:**
 - HTTP endpoints: `/api/text`, `/api/audio` 
@@ -124,17 +124,19 @@ The main service includes health checks on port 3000. Make sure your voice agent
 
 ## Troubleshooting
 
-1. **Port conflicts:** Only port 3000 is exposed - change in `docker-compose.yml` if needed
+1. **Port conflicts:** Only the voice agent port 3000 is exposed externally - change in `docker-compose.yml` if needed
 2. **Build issues:** Run `npm run docker:build` to rebuild
 3. **Process issues:** Use `npm run docker:status` to check PM2 processes
 4. **Clean restart:** `npm run docker:down && npm run docker:up`
-5. **Internal service access:** MCP servers (3001-3003) are only accessible within the container
+5. **Internal service access:** Finance and dev-tools APIs are only accessible within the container network
 
 ## Internal Service Access
 
 To access internal services for debugging:
 ```bash
-# Execute commands inside the container
-docker compose exec mcp-voice-agent curl http://localhost:3003/api/schema
-docker compose exec mcp-voice-agent curl http://localhost:3001/health
+# Execute commands inside specific containers
+docker compose exec finance-api curl http://localhost:3000/api/schema
+docker compose exec finance-api curl http://localhost:3000/health
+docker compose exec dev-tools-api curl http://localhost:3000/api/projects
+docker compose exec dev-tools-api curl http://localhost:3000/health
 ``` 

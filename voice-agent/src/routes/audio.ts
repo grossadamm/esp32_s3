@@ -4,12 +4,11 @@ import fs from 'fs';
 import { OpenAI } from 'openai';
 import { AdaptiveSTTService } from '../services/AdaptiveSTTService.js';
 import { LLMFactory } from '../services/LLMFactory.js';
-import { MCPClient } from '../services/MCPClient.js';
+import { MCPClientSingleton } from '../services/MCPClientSingleton.js';
 import { createValidationError, createExternalAPIError, createSystemError } from '../utils/errorUtils.js';
 import { logError, logInfo, logWarning } from '../utils/logger.js';
 
 const router = Router();
-const mcpClient = new MCPClient();
 const adaptiveSTT = new AdaptiveSTTService();
 
 // Configure multer for audio file uploads
@@ -96,6 +95,7 @@ router.post('/', upload.single('audio'), async (req: Request, res: Response) => 
     let llmProvider, tools, result;
     try {
       llmProvider = LLMFactory.create();
+      const mcpClient = await MCPClientSingleton.getInstance();
       tools = await mcpClient.getAvailableTools();
       result = await llmProvider.processText(transcription, tools, true); // true for verbal response
     } catch (llmError) {

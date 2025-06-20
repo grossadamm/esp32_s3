@@ -13,6 +13,7 @@ import { HardwareDetectionService } from './services/HardwareDetectionService.js
 import { AdaptiveSTTService } from './services/AdaptiveSTTService.js';
 import { createSystemError } from './utils/errorUtils.js';
 import { logError, logInfo, logWarning } from './utils/logger.js';
+import { MCPClientSingleton } from './services/MCPClientSingleton.js';
 
 dotenv.config();
 
@@ -95,6 +96,9 @@ async function initializeServices() {
   try {
     logInfo('Service Initialization', 'Initializing services...');
     
+    // Initialize MCP client singleton first (needed by LLM services)
+    await MCPClientSingleton.getInstance();
+    
     // Detect hardware capabilities
     const hardwareInfo = await HardwareDetectionService.detectHardware();
     
@@ -108,6 +112,33 @@ async function initializeServices() {
     logInfo('Service Initialization', 'Continuing with available services...');
   }
 }
+
+// Graceful shutdown handlers
+process.on('SIGINT', async () => {
+  console.log('\n🛑 Shutting down Voice Agent...');
+  try {
+    await realtimeAudioService.close();
+    await MCPClientSingleton.close();
+    console.log('✅ Graceful shutdown complete');
+    process.exit(0);
+  } catch (error) {
+    console.error('❌ Error during shutdown:', error);
+    process.exit(1);
+  }
+});
+
+process.on('SIGTERM', async () => {
+  console.log('\n🛑 Shutting down Voice Agent...');
+  try {
+    await realtimeAudioService.close();
+    await MCPClientSingleton.close();
+    console.log('✅ Graceful shutdown complete');
+    process.exit(0);
+  } catch (error) {
+    console.error('❌ Error during shutdown:', error);
+    process.exit(1);
+  }
+});
 
 server.listen(port, async () => {
   console.log(`🤖 Voice Agent running on http://localhost:${port}`);

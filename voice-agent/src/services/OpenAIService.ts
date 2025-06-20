@@ -1,6 +1,6 @@
 import OpenAI from 'openai';
 import { LLMProvider, LLMResponse } from './LLMInterface.js';
-import { MCPClient } from './MCPClient.js';
+import { MCPClientSingleton } from './MCPClientSingleton.js';
 
 interface Tool {
   name: string;
@@ -14,13 +14,11 @@ interface Tool {
 
 export class OpenAIService implements LLMProvider {
   private openai: OpenAI;
-  private mcpClient: MCPClient;
 
   constructor() {
     this.openai = new OpenAI({
       apiKey: process.env.OPENAI_API_KEY!,
     });
-    this.mcpClient = new MCPClient();
   }
 
   async processText(text: string, tools: Tool[], isVerbalResponse: boolean = false): Promise<LLMResponse> {
@@ -68,7 +66,8 @@ You have access to tools that can query a comprehensive finance system. Answer t
         for (const toolCall of toolCalls) {
           try {
             const params = JSON.parse(toolCall.function.arguments);
-            const result = await this.mcpClient.executeTool(toolCall.function.name, params);
+            const mcpClient = await MCPClientSingleton.getInstance();
+            const result = await mcpClient.executeTool(toolCall.function.name, params);
             
             toolResults.push({
               tool_call_id: toolCall.id,

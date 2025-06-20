@@ -1,6 +1,6 @@
 import Anthropic from '@anthropic-ai/sdk';
 import { LLMProvider, LLMResponse } from './LLMInterface.js';
-import { MCPClient } from './MCPClient.js';
+import { MCPClientSingleton } from './MCPClientSingleton.js';
 
 interface Tool {
   name: string;
@@ -14,19 +14,17 @@ interface Tool {
 
 export class ClaudeService implements LLMProvider {
   private anthropic: Anthropic;
-  private mcpClient: MCPClient;
 
   constructor() {
     this.anthropic = new Anthropic({
       apiKey: process.env.ANTHROPIC_API_KEY!,
     });
-    this.mcpClient = new MCPClient();
   }
 
   async processText(text: string, tools: Tool[], isVerbalResponse: boolean = false): Promise<LLMResponse> {
     try {
-      // Get available tools from finance system
-      const availableTools = await this.mcpClient.getAvailableTools();
+      // Use the tools passed as parameter (already from singleton)
+      const availableTools = tools;
       
       const basePrompt = `You are a personal finance assistant. You have access to tools that can query a comprehensive finance system. Answer this query: ${text}`;
       
@@ -75,7 +73,8 @@ You have access to tools that can query a comprehensive finance system. Answer t
         for (const toolUse of toolUseBlocks) {
           if (toolUse.type === 'tool_use') {
             try {
-              const result = await this.mcpClient.executeTool(toolUse.name, toolUse.input);
+              const mcpClient = await MCPClientSingleton.getInstance();
+              const result = await mcpClient.executeTool(toolUse.name, toolUse.input);
               toolResults.push({
                 type: "tool_result" as const,
                 tool_use_id: toolUse.id,

@@ -40,6 +40,7 @@ export class LocalSTTService {
 
   private async checkPythonDependencies(): Promise<void> {
     return new Promise((resolve, reject) => {
+      // In containerized environment, check Python ML packages directly
       const pythonCheck = spawn('python3', ['-c', `
 import sys
 try:
@@ -47,10 +48,11 @@ try:
     import whisper
     import onnxruntime as ort
     
-    # Check for GPU availability
+    # Check for GPU availability (should work in dusty-nv containers)
     if torch.cuda.is_available():
         print("CUDA_AVAILABLE=true")
         print(f"GPU_COUNT={torch.cuda.device_count()}")
+        print(f"DEVICE_NAME={torch.cuda.get_device_name(0)}")
     else:
         print("CUDA_AVAILABLE=false")
     
@@ -62,11 +64,12 @@ try:
         print("ONNX_CUDA=false")
         
     print("DEPENDENCIES_OK=true")
+    print("CONTAINER_TYPE=dusty-nv")
 except ImportError as e:
     print(f"MISSING_DEPENDENCY={e}")
     sys.exit(1)
 `]);
-
+      
       let output = '';
       let error = '';
 
@@ -80,7 +83,7 @@ except ImportError as e:
 
       pythonCheck.on('close', (code) => {
         if (code === 0 && output.includes('DEPENDENCIES_OK=true')) {
-          console.log('📦 Python dependencies check passed:');
+          console.log('📦 Containerized GPU dependencies check passed:');
           console.log(output.trim());
           resolve();
         } else {
@@ -123,6 +126,9 @@ except ImportError as e:
 
   private async runWhisperInference(audioPath: string): Promise<{ text: string; confidence?: number }> {
     return new Promise((resolve, reject) => {
+      console.log(`🚀 Using GPU Whisper (containerized) for: ${audioPath}`);
+      
+      // In containerized environment, use Whisper directly with GPU
       const pythonScript = `
 import whisper
 import torch
@@ -131,7 +137,7 @@ import json
 
 def main():
     try:
-        # Load model with GPU if available
+        # dusty-nv container has proper CUDA setup
         device = "cuda" if torch.cuda.is_available() else "cpu"
         print(f"Using device: {device}", file=sys.stderr)
         
@@ -141,7 +147,7 @@ def main():
         # Transcribe
         result = model.transcribe("${audioPath}", language="en")
         
-        # Extract confidence if available (newer Whisper versions)
+        # Extract confidence if available
         confidence = None
         if hasattr(result, 'segments') and result.segments:
             avg_confidence = sum(seg.get('avg_logprob', 0) for seg in result.segments) / len(result.segments)
@@ -150,19 +156,21 @@ def main():
         
         output = {
             "text": result["text"].strip(),
-            "confidence": confidence
+            "confidence": confidence,
+            "device": device,
+            "method": "containerized_gpu_whisper"
         }
         
         print(json.dumps(output))
         
     except Exception as e:
-        print(json.dumps({"error": str(e)}))
+        print(json.dumps({"error": str(e), "method": "containerized_gpu_error"}))
         sys.exit(1)
 
 if __name__ == "__main__":
     main()
 `;
-
+      
       const pythonProcess = spawn('python3', ['-c', pythonScript]);
       
       let output = '';
@@ -181,23 +189,28 @@ if __name__ == "__main__":
           try {
             const result = JSON.parse(output.trim());
             if (result.error) {
+              console.log(`⚠️ GPU Whisper error: ${result.error}`);
               reject(new Error(result.error));
             } else {
-              resolve(result);
+              console.log(`✅ GPU Whisper success: "${result.text}" (${result.method})`);
+              resolve({
+                text: result.text,
+                confidence: result.confidence || 0.9
+              });
             }
           } catch (parseError) {
-            reject(new Error(`Failed to parse Whisper output: ${parseError}`));
+            reject(new Error(`Failed to parse GPU Whisper output: ${parseError}`));
           }
         } else {
-          reject(new Error(`Whisper process failed with code ${code}: ${error}`));
+          reject(new Error(`GPU Whisper process failed with code ${code}: ${error}`));
         }
       });
 
       // Set timeout for inference
       setTimeout(() => {
         pythonProcess.kill();
-        reject(new Error('Whisper inference timed out'));
-      }, 30000); // 30 second timeout
+        reject(new Error('GPU Whisper inference timed out'));
+      }, 60000); // 60 second timeout for container startup
     });
   }
 

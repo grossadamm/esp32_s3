@@ -131,6 +131,18 @@
             animation: pulse 1.5s infinite;
         }
 
+        .button.permission {
+            background: rgba(255, 193, 7, 0.2);
+            border-color: #FFC107;
+            color: #FFC107;
+            animation: glow 2s ease-in-out infinite alternate;
+        }
+
+        @keyframes glow {
+            from { box-shadow: 0 0 5px rgba(255, 193, 7, 0.2); }
+            to { box-shadow: 0 0 20px rgba(255, 193, 7, 0.4); }
+        }
+
         .transcription {
             margin-top: 30px;
             padding: 20px;
@@ -184,12 +196,20 @@
             <span>🔌</span> Connect
         </button>
         
+        <button id="permissionBtn" class="button permission" style="display: none;">
+            <span>🔒</span> <span>Allow Microphone Access</span>
+        </button>
+        
         <button id="recordBtn" class="button" disabled>
             <span>🎤</span> <span id="recordText">Hold to Talk</span>
         </button>
         
         <button id="disconnectBtn" class="button danger" disabled>
             <span>❌</span> Disconnect
+        </button>
+        
+        <button id="testAudioBtn" class="button" style="display: none;">
+            <span>🔊</span> Test Audio
         </button>
         
         <div id="transcription" class="transcription empty">
@@ -201,20 +221,48 @@
 
     <script>
         let ws = null;
-        let mediaRecorder = null;
-        let audioChunks = [];
         let isRecording = false;
         let isConnected = false;
+        let microphonePermissionGranted = false;
 
         const connectBtn = document.getElementById('connectBtn');
+        const permissionBtn = document.getElementById('permissionBtn');
         const recordBtn = document.getElementById('recordBtn');
         const disconnectBtn = document.getElementById('disconnectBtn');
+        const testAudioBtn = document.getElementById('testAudioBtn');
         const status = document.getElementById('status');
         const transcription = document.getElementById('transcription');
         const recordText = document.getElementById('recordText');
 
+        // Check if we're on a secure connection (required for microphone access)
+        function checkSecureConnection() {
+            const hostname = window.location.hostname;
+            const isLocalHost = hostname === 'localhost' || hostname === '127.0.0.1';
+            const isLocalNetwork = hostname.startsWith('192.168.') || hostname.startsWith('10.') || hostname.startsWith('172.');
+            const isSecure = window.location.protocol === 'https:';
+            
+            // Allow localhost, local network IPs, or HTTPS
+            if (!isSecure && !isLocalHost && !isLocalNetwork) {
+                updateStatus('HTTPS Required', 'disconnected');
+                updateTranscription('🔒 Microphone access requires a secure connection (HTTPS) for external domains. Please use HTTPS or access via local network.', true);
+                return false;
+            }
+            return true;
+        }
+
         // WebSocket connection
-        function connect() {
+        async function connect() {
+            if (!checkSecureConnection()) {
+                return;
+            }
+
+            // Initialize audio context (requires user gesture on iOS)
+            console.log('Initializing audio context...');
+            await initializeAudio();
+
+            // Check microphone permission first
+            await checkInitialPermissions();
+            
             const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
             const wsUrl = `${protocol}//${window.location.host}/api/audio/realtime`;
             
@@ -255,9 +303,24 @@
                 ws.close();
             }
             stopRecording();
+            
+            // Stop any currently playing audio
+            if (currentAudioSource) {
+                try {
+                    currentAudioSource.stop();
+                    currentAudioSource.disconnect();
+                    currentAudioSource = null;
+                    isPlayingAudio = false;
+                    console.log('Stopped audio on disconnect');
+                } catch (e) {
+                    // Audio source may already be stopped
+                }
+            }
         }
 
         function handleWebSocketMessage(data) {
+            console.log('WebSocket message:', data.type, data);
+            
             switch (data.type) {
                 case 'session_ready':
                     console.log('Session ready');
@@ -269,15 +332,22 @@
                     updateStatus('Processing...', 'connected');
                     break;
                 case 'transcript_delta':
+                    console.log('Transcript:', data.text);
                     updateTranscription(data.text, false);
                     break;
                 case 'audio_delta':
-                    playAudioChunk(data.audio);
+                    console.log('Audio delta received, audio length:', data.audio ? data.audio.length : 'none');
+                    if (data.audio) {
+                        playAudioChunk(data.audio);
+                        updateStatus('🔊 Playing response...', 'connected');
+                    }
                     break;
                 case 'error':
                     console.error('Server error:', data.message);
                     updateStatus('Error: ' + data.message, 'disconnected');
                     break;
+                default:
+                    console.log('Unknown message type:', data.type);
             }
         }
 
@@ -285,31 +355,215 @@
             if (text && text.trim()) {
                 transcription.textContent = text;
                 transcription.classList.remove('empty');
+            } else if (!text) {
+                transcription.textContent = 'Your conversation will appear here...';
+                transcription.classList.add('empty');
             }
         }
 
-        function playAudioChunk(base64Audio) {
+        let audioContext = null;
+        let currentAudioSource = null;
+        let isPlayingAudio = false;
+
+        // Initialize audio context (requires user interaction on iOS)
+        async function initializeAudio() {
+            if (!audioContext) {
+                try {
+                    audioContext = new (window.AudioContext || window.webkitAudioContext)({
+                        sampleRate: 24000  // Match OpenAI's output
+                    });
+                    console.log('Audio context initialized:', audioContext.state);
+                    
+                    // Resume audio context if suspended (iOS requirement)
+                    if (audioContext.state === 'suspended') {
+                        await audioContext.resume();
+                        console.log('Audio context resumed');
+                    }
+                    return true;
+                } catch (error) {
+                    console.error('Failed to initialize audio context:', error);
+                    return false;
+                }
+            } else {
+                // Always try to resume on user interaction
+                if (audioContext.state === 'suspended') {
+                    try {
+                        await audioContext.resume();
+                        console.log('Audio context resumed on user interaction');
+                    } catch (error) {
+                        console.error('Failed to resume audio context:', error);
+                    }
+                }
+            }
+            return true;
+        }
+
+        async function playAudioChunk(base64Audio) {
+            console.log('Received audio chunk, length:', base64Audio.length);
+            
             try {
-                const audioData = atob(base64Audio);
-                const audioBuffer = new ArrayBuffer(audioData.length);
-                const audioView = new Uint8Array(audioBuffer);
+                if (!audioContext) {
+                    console.error('Audio context not initialized');
+                    updateStatus('🔊 Audio received (no context)', 'connected');
+                    return;
+                }
+
+                // Resume audio context if suspended (iOS requirement)
+                if (audioContext.state === 'suspended') {
+                    console.log('Resuming audio context...');
+                    await audioContext.resume();
+                }
+
+                // Decode base64 to binary (raw PCM16 data from OpenAI)
+                const binaryString = atob(base64Audio);
+                const arrayBuffer = new ArrayBuffer(binaryString.length);
+                const uint8Array = new Uint8Array(arrayBuffer);
                 
-                for (let i = 0; i < audioData.length; i++) {
-                    audioView[i] = audioData.charCodeAt(i);
+                for (let i = 0; i < binaryString.length; i++) {
+                    uint8Array[i] = binaryString.charCodeAt(i);
+                }
+
+                console.log('Converting raw PCM16 to AudioBuffer...');
+                
+                // Convert raw PCM16 data to AudioBuffer manually
+                // OpenAI sends PCM16 at 24kHz mono
+                const pcmData = new Int16Array(arrayBuffer);
+                const sampleRate = 24000;
+                const numSamples = pcmData.length;
+                const duration = numSamples / sampleRate;
+                
+                console.log(`Audio: ${numSamples} samples, ${duration.toFixed(2)}s duration`);
+                
+                // Create AudioBuffer manually
+                const audioBuffer = audioContext.createBuffer(1, numSamples, sampleRate);
+                const channelData = audioBuffer.getChannelData(0);
+                
+                // Convert Int16 PCM to Float32 audio data
+                for (let i = 0; i < numSamples; i++) {
+                    channelData[i] = pcmData[i] / 32768.0; // Convert from -32768,32767 to -1,1
                 }
                 
-                const audioBlob = new Blob([audioBuffer], { type: 'audio/wav' });
-                const audioUrl = URL.createObjectURL(audioBlob);
-                const audio = new Audio(audioUrl);
+                // Stop any currently playing audio
+                if (currentAudioSource) {
+                    try {
+                        currentAudioSource.stop();
+                        currentAudioSource.disconnect();
+                        console.log('Stopped previous audio source');
+                    } catch (e) {
+                        // Audio source may already be stopped
+                    }
+                }
                 
-                audio.play().catch(e => console.error('Audio play error:', e));
+                console.log('Creating audio source...');
+                
+                // Create buffer source and play
+                const source = audioContext.createBufferSource();
+                source.buffer = audioBuffer;
+                source.connect(audioContext.destination);
+                
+                // Track current source for cleanup
+                currentAudioSource = source;
+                isPlayingAudio = true;
+                
+                // Clean up when audio ends
+                source.onended = () => {
+                    console.log('Audio playback ended');
+                    currentAudioSource = null;
+                    isPlayingAudio = false;
+                    updateStatus('Connected', 'connected');
+                };
+                
+                console.log('Playing audio via Web Audio API...');
+                source.start(0);
+                
+                updateStatus('🔊 Playing response...', 'connected');
+                
             } catch (error) {
                 console.error('Error playing audio chunk:', error);
+                
+                // Fallback: try HTML5 audio
+                try {
+                    console.log('Trying HTML5 audio fallback...');
+                    await playAudioFallback(base64Audio);
+                } catch (fallbackError) {
+                    console.error('Fallback audio also failed:', fallbackError);
+                    updateStatus('🔊 Audio received (play failed)', 'connected');
+                }
             }
         }
 
-        async function startRecording() {
+        async function playAudioFallback(base64Audio) {
+            const audioData = atob(base64Audio);
+            const audioBuffer = new ArrayBuffer(audioData.length);
+            const audioView = new Uint8Array(audioBuffer);
+            
+            for (let i = 0; i < audioData.length; i++) {
+                audioView[i] = audioData.charCodeAt(i);
+            }
+            
+            const audioBlob = new Blob([audioBuffer], { type: 'audio/mp3' });
+            const audioUrl = URL.createObjectURL(audioBlob);
+            const audio = new Audio(audioUrl);
+            
+            audio.volume = 1.0;
+            
+            return new Promise((resolve, reject) => {
+                audio.addEventListener('ended', () => {
+                    URL.revokeObjectURL(audioUrl);
+                    resolve();
+                });
+                
+                audio.addEventListener('error', (e) => {
+                    URL.revokeObjectURL(audioUrl);
+                    reject(e);
+                });
+                
+                audio.play().then(resolve).catch(reject);
+            });
+        }
+
+        async function checkMicrophonePermission() {
             try {
+                if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+                    throw new Error('Microphone not supported');
+                }
+
+                // Check permission status
+                if (navigator.permissions) {
+                    const permission = await navigator.permissions.query({ name: 'microphone' });
+                    return permission.state;
+                }
+                
+                return 'unknown';
+            } catch (error) {
+                console.error('Permission check error:', error);
+                return 'unknown';
+            }
+        }
+
+        async function checkInitialPermissions() {
+            const permissionState = await checkMicrophonePermission();
+            
+            if (permissionState === 'granted') {
+                microphonePermissionGranted = true;
+                updateUI();
+            } else if (permissionState === 'denied') {
+                updateStatus('Permission Denied', 'disconnected');
+                updateTranscription('🔒 Microphone access was previously denied. Please enable microphone permissions in your browser settings and refresh the page.', true);
+            } else {
+                // Permission is 'prompt' or 'unknown' - show permission button
+                permissionBtn.style.display = 'block';
+                updateStatus('Permission Required', 'disconnected');
+                updateTranscription('🎤 Microphone access is required for voice chat. Click "Allow Microphone Access" and then "Allow" in the browser prompt.', true);
+            }
+        }
+
+        async function requestMicrophonePermission() {
+            try {
+                updateStatus('Requesting Permission...', 'connected');
+                
+                // Request permission by attempting to get user media
+                // This MUST be called from a user gesture (button click)
                 const stream = await navigator.mediaDevices.getUserMedia({
                     audio: {
                         sampleRate: 24000,
@@ -319,47 +573,153 @@
                         autoGainControl: true
                     }
                 });
-
-                mediaRecorder = new MediaRecorder(stream);
-                audioChunks = [];
-                isRecording = true;
                 
-                mediaRecorder.ondataavailable = (event) => {
-                    if (event.data.size > 0) {
-                        audioChunks.push(event.data);
+                // Stop the stream immediately - we just wanted to check permission
+                stream.getTracks().forEach(track => track.stop());
+                
+                microphonePermissionGranted = true;
+                permissionBtn.style.display = 'none';
+                updateStatus('Connected', 'connected');
+                updateTranscription('✅ Microphone access granted! You can now hold the button to talk.', true);
+                updateUI();
+                
+                return true;
+            } catch (error) {
+                console.error('Permission request error:', error);
+                handleMicrophoneError(error);
+                return false;
+            }
+        }
+
+        function handleMicrophoneError(error) {
+            let errorMessage = 'Microphone Error';
+            
+            if (error.name === 'NotAllowedError' || error.name === 'PermissionDeniedError') {
+                errorMessage = 'Microphone Permission Denied';
+            } else if (error.name === 'NotFoundError') {
+                errorMessage = 'No Microphone Found';
+            } else if (error.name === 'NotSupportedError') {
+                errorMessage = 'Microphone Not Supported';
+            } else if (error.name === 'NotReadableError') {
+                errorMessage = 'Microphone Already in Use';
+            }
+            
+            updateStatus(errorMessage, 'disconnected');
+            
+            // Show user-friendly guidance
+            if (error.name === 'NotAllowedError' || error.name === 'PermissionDeniedError') {
+                updateTranscription('🔒 Please allow microphone access in your browser settings and refresh the page.', true);
+            }
+        }
+
+        let audioWorkletNode = null;
+        let recordingStream = null;
+
+        async function startRecording() {
+            try {
+                // Stop any currently playing audio before recording
+                if (currentAudioSource) {
+                    try {
+                        currentAudioSource.stop();
+                        currentAudioSource.disconnect();
+                        currentAudioSource = null;
+                        isPlayingAudio = false;
+                        console.log('Stopped audio before recording');
+                    } catch (e) {
+                        // Audio source may already be stopped
+                    }
+                }
+                
+                // Ensure audio context is ready for playback (iOS requirement)
+                await initializeAudio();
+                
+                // Check permission first
+                const permissionState = await checkMicrophonePermission();
+                
+                if (permissionState === 'denied') {
+                    updateStatus('Permission Denied', 'disconnected');
+                    updateTranscription('🔒 Microphone access was denied. Please enable microphone permissions in your browser settings and refresh the page.', true);
+                    return;
+                }
+
+                // Get audio stream with proper format for OpenAI Realtime API
+                recordingStream = await navigator.mediaDevices.getUserMedia({
+                    audio: {
+                        sampleRate: 24000,  // OpenAI requires 24kHz
+                        channelCount: 1,    // Mono
+                        echoCancellation: true,
+                        noiseSuppression: true,
+                        autoGainControl: true
+                    }
+                });
+
+                // Use Web Audio API to get raw PCM data
+                const audioCtx = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 24000 });
+                const source = audioCtx.createMediaStreamSource(recordingStream);
+                
+                // Create a script processor to capture raw audio data
+                const processor = audioCtx.createScriptProcessor(2048, 1, 1);
+                
+                processor.onaudioprocess = (event) => {
+                    if (ws && ws.readyState === WebSocket.OPEN && isRecording) {
+                        const inputBuffer = event.inputBuffer;
+                        const inputData = inputBuffer.getChannelData(0); // Get mono channel
                         
-                        // Send audio chunk to server
-                        const reader = new FileReader();
-                        reader.onload = () => {
-                            const base64Audio = btoa(reader.result);
-                            if (ws && ws.readyState === WebSocket.OPEN) {
-                                ws.send(JSON.stringify({
-                                    type: 'audio_chunk',
-                                    audio: base64Audio
-                                }));
-                            }
-                        };
-                        reader.readAsBinaryString(event.data);
+                        // Convert float32 to int16 (PCM16)
+                        const pcmData = new Int16Array(inputData.length);
+                        for (let i = 0; i < inputData.length; i++) {
+                            // Convert from -1,1 float to -32768,32767 int16
+                            pcmData[i] = Math.max(-32768, Math.min(32767, inputData[i] * 32767));
+                        }
+                        
+                        // Convert to base64
+                        const uint8Array = new Uint8Array(pcmData.buffer);
+                        const base64Audio = btoa(String.fromCharCode.apply(null, uint8Array));
+                        
+                        // Send to server
+                        ws.send(JSON.stringify({
+                            type: 'audio_chunk',
+                            audio: base64Audio
+                        }));
                     }
                 };
-
-                mediaRecorder.start(100); // Send chunks every 100ms
+                
+                source.connect(processor);
+                processor.connect(audioCtx.destination);
+                
+                audioWorkletNode = processor;
+                isRecording = true;
                 updateStatus('Recording...', 'recording');
                 updateUI();
                 
+                console.log('Started recording with PCM16 at 24kHz');
+                
             } catch (error) {
                 console.error('Error starting recording:', error);
-                updateStatus('Microphone Error', 'disconnected');
+                handleMicrophoneError(error);
             }
         }
 
         function stopRecording() {
-            if (mediaRecorder && isRecording) {
-                mediaRecorder.stop();
-                mediaRecorder.stream.getTracks().forEach(track => track.stop());
+            if (isRecording) {
                 isRecording = false;
+                
+                // Clean up Web Audio API resources
+                if (audioWorkletNode) {
+                    audioWorkletNode.disconnect();
+                    audioWorkletNode = null;
+                }
+                
+                // Stop the recording stream
+                if (recordingStream) {
+                    recordingStream.getTracks().forEach(track => track.stop());
+                    recordingStream = null;
+                }
+                
                 updateStatus('Connected', 'connected');
                 updateUI();
+                
+                console.log('Stopped recording');
             }
         }
 
@@ -368,23 +728,88 @@
             status.className = `status ${className}`;
         }
 
+        async function testAudio() {
+            console.log('Testing audio playback...');
+            
+            try {
+                // Ensure audio context is ready
+                await initializeAudio();
+                
+                if (!audioContext) {
+                    updateStatus('Audio context not ready', 'disconnected');
+                    return;
+                }
+
+                // Resume if suspended
+                if (audioContext.state === 'suspended') {
+                    await audioContext.resume();
+                }
+
+                // Stop any currently playing audio before test
+                if (currentAudioSource) {
+                    try {
+                        currentAudioSource.stop();
+                        currentAudioSource.disconnect();
+                        currentAudioSource = null;
+                        isPlayingAudio = false;
+                        console.log('Stopped audio before test');
+                    } catch (e) {
+                        // Audio source may already be stopped
+                    }
+                }
+
+                const oscillator = audioContext.createOscillator();
+                const gainNode = audioContext.createGain();
+                
+                oscillator.connect(gainNode);
+                gainNode.connect(audioContext.destination);
+                
+                oscillator.frequency.value = 440; // A4 note
+                gainNode.gain.setValueAtTime(0.1, audioContext.currentTime);
+                gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.5);
+                
+                oscillator.start(audioContext.currentTime);
+                oscillator.stop(audioContext.currentTime + 0.5);
+                
+                updateStatus('🔊 Test tone playing', 'connected');
+                setTimeout(() => updateStatus('Connected', 'connected'), 1000);
+                
+                console.log('Test audio played successfully');
+            } catch (error) {
+                console.error('Test audio error:', error);
+                updateStatus('Audio test failed', 'disconnected');
+            }
+        }
+
         function updateUI() {
             connectBtn.disabled = isConnected;
             disconnectBtn.disabled = !isConnected;
-            recordBtn.disabled = !isConnected;
+            recordBtn.disabled = !isConnected || !microphonePermissionGranted;
+            
+            // Show test audio button when connected
+            testAudioBtn.style.display = isConnected ? 'block' : 'none';
+            
+            // Show/hide permission button based on state
+            if (!microphonePermissionGranted && isConnected) {
+                permissionBtn.style.display = 'block';
+            } else {
+                permissionBtn.style.display = 'none';
+            }
             
             if (isRecording) {
                 recordBtn.classList.add('recording');
                 recordText.textContent = 'Recording...';
             } else {
                 recordBtn.classList.remove('recording');
-                recordText.textContent = 'Hold to Talk';
+                recordText.textContent = microphonePermissionGranted ? 'Hold to Talk' : 'Permission Required';
             }
         }
 
         // Event listeners
         connectBtn.addEventListener('click', connect);
         disconnectBtn.addEventListener('click', disconnect);
+        permissionBtn.addEventListener('click', requestMicrophonePermission);
+        testAudioBtn.addEventListener('click', testAudio);
 
         // Touch-friendly recording (hold to talk)
         recordBtn.addEventListener('touchstart', (e) => {
@@ -419,8 +844,41 @@
             e.preventDefault();
         });
 
+        // Initialize the app
+        async function initialize() {
+            if (!checkSecureConnection()) {
+                return;
+            }
+            
+            // Debug browser capabilities
+            console.log('Browser check:', {
+                hasNavigator: !!navigator,
+                hasMediaDevices: !!navigator.mediaDevices,
+                hasGetUserMedia: !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia),
+                userAgent: navigator.userAgent,
+                protocol: window.location.protocol,
+                hostname: window.location.hostname
+            });
+            
+            // Check if browser supports required APIs
+            if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+                updateStatus('Not Supported', 'disconnected');
+                updateTranscription(`❌ Browser API check failed. Debug info: navigator.mediaDevices=${!!navigator.mediaDevices}, getUserMedia=${!!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia)}. Please ensure you're using a secure connection.`, true);
+                return;
+            }
+            
+            updateUI();
+            
+            // Check permissions on load (but don't show permission button until connected)
+            const permissionState = await checkMicrophonePermission();
+            if (permissionState === 'granted') {
+                microphonePermissionGranted = true;
+                updateUI();
+            }
+        }
+
         // Initialize UI
-        updateUI();
+        initialize();
     </script>
 </body>
 </html> 

@@ -257,15 +257,6 @@ The voice agent now supports **automatic GPU acceleration** for Speech-to-Text (
 
 ### Usage
 ```bash
-# Automatic GPU deployment (detects hardware and configures appropriately)
-./scripts/deploy-with-gpu.sh
-
-# Force GPU-only deployment (fails if no GPU detected)
-./scripts/deploy-with-gpu.sh --gpu-only
-
-# Force CPU-only deployment (uses cloud APIs only)
-./scripts/deploy-with-gpu.sh --cpu-only
-
 # Check GPU status after deployment
 curl http://localhost:3000/api/hardware-status
 curl http://localhost:3000/api/stt-status
@@ -293,7 +284,8 @@ The system automatically detects:
 # - Thermal management considerations
 # - Local processing for maximum responsiveness
 
-./scripts/deploy-with-gpu.sh
+# For Jetson deployment, use Docker Compose:
+docker compose up --build -d
 # Expected output: "🚀 Jetson device detected: NVIDIA Jetson Nano Orin"
 ```
 

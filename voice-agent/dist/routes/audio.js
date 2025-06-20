@@ -2,10 +2,14 @@ import { Router } from 'express';
 import multer from 'multer';
 import fs from 'fs';
 import { OpenAI } from 'openai';
+import { AdaptiveSTTService } from '../services/AdaptiveSTTService.js';
 import { LLMFactory } from '../services/LLMFactory.js';
 import { MCPClient } from '../services/MCPClient.js';
+import { createValidationError, createExternalAPIError, createSystemError } from '../utils/errorUtils.js';
+import { logError, logInfo, logWarning } from '../utils/logger.js';
 const router = Router();
 const mcpClient = new MCPClient();
+const adaptiveSTT = new AdaptiveSTTService();
 // Configure multer for audio file uploads
 const upload = multer({
     dest: 'uploads/',
@@ -34,88 +38,122 @@ const upload = multer({
             'audio/webm',
             'audio/ogg',
             'audio/aiff',
-            'audio/x-aiff'
+            'audio/x-aiff',
+            'application/octet-stream' // Fallback for files with unknown MIME type
         ];
-        if (allowedMimes.includes(file.mimetype)) {
+        // Check MIME type or file extension
+        const ext = file.originalname.toLowerCase().split('.').pop();
+        const allowedExtensions = ['wav', 'mp3', 'mp4', 'm4a', 'webm', 'ogg', 'aiff'];
+        if (allowedMimes.includes(file.mimetype) || allowedExtensions.includes(ext || '')) {
             cb(null, true);
         }
         else {
-            cb(new Error(`Invalid audio format: ${file.mimetype}. Supported: WAV, MP3, MP4, M4A, WebM, OGG, AIFF`));
+            cb(new Error(`Invalid audio format: ${file.mimetype} (${file.originalname}). Supported: WAV, MP3, MP4, M4A, WebM, OGG, AIFF`));
         }
     }
 });
-router.post('/debug', upload.single('audio'), async (req, res) => {
+router.post('/', upload.single('audio'), async (req, res) => {
     let tempFilePath;
+    let responseAudioPath;
     try {
         if (!req.file) {
-            return res.status(400).json({
-                error: 'No audio file provided'
-            });
+            return createValidationError(res, 'No audio file provided');
         }
         tempFilePath = req.file.path;
-        console.log(`Processing audio file: ${req.file.originalname} (${req.file.size} bytes)`);
-        // Initialize OpenAI client for Whisper
+        logInfo('Audio Processing', 'Processing audio file', {
+            filename: req.file.originalname,
+            size: req.file.size
+        });
+        // Initialize OpenAI client for TTS
         const openai = new OpenAI({
             apiKey: process.env.OPENAI_API_KEY
         });
-        // Transcribe audio using Whisper
+        // Transcribe audio using Adaptive STT (GPU or Cloud)
         let transcription;
         try {
-            transcription = await openai.audio.transcriptions.create({
-                file: fs.createReadStream(tempFilePath),
-                model: 'whisper-1',
-                language: 'en', // Optional: specify language
-                response_format: 'text'
-            });
+            const audioBuffer = fs.readFileSync(tempFilePath);
+            transcription = await adaptiveSTT.transcribeAudio(audioBuffer);
         }
-        catch (whisperError) {
-            console.error('Whisper API error:', whisperError);
-            throw new Error(`Whisper transcription failed: ${whisperError instanceof Error ? whisperError.message : 'Unknown error'}`);
+        catch (sttError) {
+            logError('STT Processing', sttError);
+            return createExternalAPIError(res, 'Speech recognition', sttError);
         }
-        console.log(`Transcribed text: ${transcription}`);
+        logInfo('Audio Processing', `Transcribed text: ${transcription}`);
         if (!transcription || transcription.trim().length === 0) {
-            return res.status(400).json({
-                error: 'No speech detected in audio file'
-            });
+            return createValidationError(res, 'No speech detected in audio file');
         }
         // Process the transcribed text through the LLM pipeline
         let llmProvider, tools, result;
         try {
             llmProvider = LLMFactory.create();
             tools = await mcpClient.getAvailableTools();
-            result = await llmProvider.processText(transcription, tools);
+            result = await llmProvider.processText(transcription, tools, true); // true for verbal response
         }
         catch (llmError) {
-            console.error('LLM processing error:', llmError);
-            throw new Error(`LLM processing failed: ${llmError instanceof Error ? llmError.message : 'Unknown error'}`);
+            logError('LLM Processing', llmError);
+            return createExternalAPIError(res, 'Language model', llmError);
         }
-        const response = {
-            transcription: transcription,
-            response: result.response,
+        logInfo('Audio Processing', 'Generated response', {
+            response: result.response.substring(0, 100) + (result.response.length > 100 ? '...' : ''),
             toolsUsed: result.toolsUsed
-        };
-        res.json(response);
+        });
+        // Convert text response to speech using OpenAI TTS
+        try {
+            const ttsResponse = await openai.audio.speech.create({
+                model: 'tts-1', // or 'tts-1-hd' for higher quality
+                voice: 'alloy', // Available voices: alloy, echo, fable, onyx, nova, shimmer
+                input: result.response,
+                response_format: 'mp3', // ESP32 can handle MP3
+                speed: 1.0 // Normal speed
+            });
+            // Save the audio response to a temporary file
+            responseAudioPath = `uploads/tts-${Date.now()}-${Math.round(Math.random() * 1E9)}.mp3`;
+            const buffer = Buffer.from(await ttsResponse.arrayBuffer());
+            fs.writeFileSync(responseAudioPath, buffer);
+            logInfo('Audio Processing', 'Generated TTS audio', {
+                audioPath: responseAudioPath,
+                size: buffer.length
+            });
+            // Send the audio file as response
+            res.setHeader('Content-Type', 'audio/mpeg');
+            res.setHeader('Content-Length', buffer.length.toString());
+            res.setHeader('X-Transcription', encodeURIComponent(transcription)); // Include transcription in header for debugging
+            res.setHeader('X-Tools-Used', encodeURIComponent(result.toolsUsed.join(','))); // Include tools used in header
+            res.send(buffer);
+        }
+        catch (ttsError) {
+            logError('TTS Processing', ttsError);
+            return createExternalAPIError(res, 'Text-to-speech', ttsError);
+        }
     }
     catch (error) {
-        console.error('Audio endpoint error:', error);
-        const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-        res.status(500).json({
-            error: 'Failed to process audio',
-            message: errorMessage
-        });
+        logError('Audio Processing', error);
+        createSystemError(res, 'Failed to process audio', error);
     }
     finally {
-        // Clean up temp file
+        // Clean up temp files
         if (tempFilePath && fs.existsSync(tempFilePath)) {
             try {
                 fs.unlinkSync(tempFilePath);
-                console.log(`Cleaned up temp file: ${tempFilePath}`);
+                logInfo('File Cleanup', `Cleaned up input file: ${tempFilePath}`);
             }
             catch (cleanupError) {
-                console.error('Failed to clean up temp file:', cleanupError);
+                logWarning('File Cleanup', 'Failed to clean up input file', { error: cleanupError });
             }
+        }
+        if (responseAudioPath && fs.existsSync(responseAudioPath)) {
+            // Clean up the response audio file after a short delay to ensure it was sent
+            setTimeout(() => {
+                try {
+                    fs.unlinkSync(responseAudioPath);
+                    logInfo('File Cleanup', `Cleaned up response file: ${responseAudioPath}`);
+                }
+                catch (cleanupError) {
+                    logWarning('File Cleanup', 'Failed to clean up response file', { error: cleanupError });
+                }
+            }, 1000);
         }
     }
 });
-export { router as audioDebugRouter };
+export { router as audioRouter };
 //# sourceMappingURL=audio.js.map

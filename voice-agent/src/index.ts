@@ -8,6 +8,8 @@ import { audioRouter } from './routes/audio.js';
 import { FileCleanupService } from './services/FileCleanupService.js';
 import { HardwareDetectionService } from './services/HardwareDetectionService.js';
 import { AdaptiveSTTService } from './services/AdaptiveSTTService.js';
+import { createSystemError } from './utils/errorUtils.js';
+import { logError, logInfo, logWarning } from './utils/logger.js';
 
 dotenv.config();
 
@@ -50,10 +52,8 @@ app.get('/api/hardware-status', async (req, res) => {
       timestamp: new Date().toISOString()
     });
   } catch (error) {
-    res.status(500).json({
-      error: 'Failed to detect hardware',
-      message: error instanceof Error ? error.message : String(error)
-    });
+    logError('Hardware Detection', error);
+    createSystemError(res, 'Failed to detect hardware', error);
   }
 });
 
@@ -70,17 +70,15 @@ app.get('/api/stt-status', async (req, res) => {
       timestamp: new Date().toISOString()
     });
   } catch (error) {
-    res.status(500).json({
-      error: 'Failed to get STT status',
-      message: error instanceof Error ? error.message : String(error)
-    });
+    logError('STT Status', error);
+    createSystemError(res, 'Failed to get STT status', error);
   }
 });
 
 // Initialize hardware detection at startup
 async function initializeServices() {
   try {
-    console.log('🔧 Initializing services...');
+    logInfo('Service Initialization', 'Initializing services...');
     
     // Detect hardware capabilities
     const hardwareInfo = await HardwareDetectionService.detectHardware();
@@ -89,10 +87,10 @@ async function initializeServices() {
     const sttService = new AdaptiveSTTService();
     await sttService.initialize();
     
-    console.log('✅ Services initialized successfully');
+    logInfo('Service Initialization', 'Services initialized successfully');
   } catch (error) {
-    console.warn('⚠️ Service initialization had issues:', error instanceof Error ? error.message : String(error));
-    console.log('🔄 Continuing with available services...');
+    logWarning('Service Initialization', 'Service initialization had issues', { error });
+    logInfo('Service Initialization', 'Continuing with available services...');
   }
 }
 

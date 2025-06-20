@@ -8,8 +8,10 @@ interface Tool {
     };
 }
 export declare class MCPClient {
-    private baseUrl;
+    private clients;
+    private config;
     constructor();
+    private connectToServer;
     getAvailableTools(): Promise<Tool[]>;
     executeTool(name: string, params?: any): Promise<any>;
     close(): Promise<void>;

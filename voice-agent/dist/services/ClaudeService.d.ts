@@ -12,7 +12,7 @@ export declare class ClaudeService implements LLMProvider {
     private anthropic;
     private mcpClient;
     constructor();
-    processText(text: string, tools: Tool[]): Promise<LLMResponse>;
+    processText(text: string, tools: Tool[], isVerbalResponse?: boolean): Promise<LLMResponse>;
     getModelName(): string;
 }
 export {};

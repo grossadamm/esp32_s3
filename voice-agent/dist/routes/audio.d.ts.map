@@ -1,1 +1,1 @@
-{"version":3,"file":"audio.d.ts","sourceRoot":"","sources":["../../src/routes/audio.ts"],"names":[],"mappings":"AAOA,QAAA,MAAM,MAAM,4CAAW,CAAC;AAiIxB,OAAO,EAAE,MAAM,IAAI,gBAAgB,EAAE,CAAC"}
+{"version":3,"file":"audio.d.ts","sourceRoot":"","sources":["../../src/routes/audio.ts"],"names":[],"mappings":"AAUA,QAAA,MAAM,MAAM,4CAAW,CAAC;AAiKxB,OAAO,EAAE,MAAM,IAAI,WAAW,EAAE,CAAC"}

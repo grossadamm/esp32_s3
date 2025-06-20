@@ -5,6 +5,8 @@ import { OpenAI } from 'openai';
 import { AdaptiveSTTService } from '../services/AdaptiveSTTService.js';
 import { LLMFactory } from '../services/LLMFactory.js';
 import { MCPClient } from '../services/MCPClient.js';
+import { createValidationError, createExternalAPIError, createSystemError } from '../utils/errorUtils.js';
+import { logError, logInfo, logWarning } from '../utils/logger.js';
 
 const router = Router();
 const mcpClient = new MCPClient();
@@ -60,13 +62,14 @@ router.post('/', upload.single('audio'), async (req: Request, res: Response) => 
   
   try {
     if (!req.file) {
-      return res.status(400).json({
-        error: 'No audio file provided'
-      });
+      return createValidationError(res, 'No audio file provided');
     }
 
     tempFilePath = req.file.path;
-    console.log(`Processing audio file: ${req.file.originalname} (${req.file.size} bytes)`);
+    logInfo('Audio Processing', 'Processing audio file', {
+      filename: req.file.originalname,
+      size: req.file.size
+    });
 
     // Initialize OpenAI client for TTS
     const openai = new OpenAI({
@@ -79,16 +82,14 @@ router.post('/', upload.single('audio'), async (req: Request, res: Response) => 
       const audioBuffer = fs.readFileSync(tempFilePath);
       transcription = await adaptiveSTT.transcribeAudio(audioBuffer);
     } catch (sttError) {
-      console.error('STT error:', sttError);
-      throw new Error(`Speech transcription failed: ${sttError instanceof Error ? sttError.message : 'Unknown error'}`);
+      logError('STT Processing', sttError);
+      return createExternalAPIError(res, 'Speech recognition', sttError);
     }
 
-    console.log(`Transcribed text: ${transcription}`);
+    logInfo('Audio Processing', `Transcribed text: ${transcription}`);
 
     if (!transcription || transcription.trim().length === 0) {
-      return res.status(400).json({
-        error: 'No speech detected in audio file'
-      });
+      return createValidationError(res, 'No speech detected in audio file');
     }
 
     // Process the transcribed text through the LLM pipeline
@@ -98,12 +99,14 @@ router.post('/', upload.single('audio'), async (req: Request, res: Response) => 
       tools = await mcpClient.getAvailableTools();
       result = await llmProvider.processText(transcription, tools, true); // true for verbal response
     } catch (llmError) {
-      console.error('LLM processing error:', llmError);
-      throw new Error(`LLM processing failed: ${llmError instanceof Error ? llmError.message : 'Unknown error'}`);
+      logError('LLM Processing', llmError);
+      return createExternalAPIError(res, 'Language model', llmError);
     }
 
-    console.log(`Generated response: ${result.response}`);
-    console.log(`Tools used: ${result.toolsUsed.join(', ')}`);
+    logInfo('Audio Processing', 'Generated response', {
+      response: result.response.substring(0, 100) + (result.response.length > 100 ? '...' : ''),
+      toolsUsed: result.toolsUsed
+    });
 
     // Convert text response to speech using OpenAI TTS
     try {
@@ -120,7 +123,10 @@ router.post('/', upload.single('audio'), async (req: Request, res: Response) => 
       const buffer = Buffer.from(await ttsResponse.arrayBuffer());
       fs.writeFileSync(responseAudioPath, buffer);
 
-      console.log(`Generated TTS audio: ${responseAudioPath} (${buffer.length} bytes)`);
+      logInfo('Audio Processing', 'Generated TTS audio', {
+        audioPath: responseAudioPath,
+        size: buffer.length
+      });
 
       // Send the audio file as response
       res.setHeader('Content-Type', 'audio/mpeg');
@@ -131,27 +137,21 @@ router.post('/', upload.single('audio'), async (req: Request, res: Response) => 
       res.send(buffer);
 
     } catch (ttsError) {
-      console.error('TTS API error:', ttsError);
-      throw new Error(`Text-to-speech failed: ${ttsError instanceof Error ? ttsError.message : 'Unknown error'}`);
+      logError('TTS Processing', ttsError);
+      return createExternalAPIError(res, 'Text-to-speech', ttsError);
     }
 
   } catch (error) {
-    console.error('Audio endpoint error:', error);
-    
-    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-    
-    res.status(500).json({
-      error: 'Failed to process audio',
-      message: errorMessage
-    });
+    logError('Audio Processing', error);
+    createSystemError(res, 'Failed to process audio', error);
   } finally {
     // Clean up temp files
     if (tempFilePath && fs.existsSync(tempFilePath)) {
       try {
         fs.unlinkSync(tempFilePath);
-        console.log(`Cleaned up input file: ${tempFilePath}`);
+        logInfo('File Cleanup', `Cleaned up input file: ${tempFilePath}`);
       } catch (cleanupError) {
-        console.error('Failed to clean up input file:', cleanupError);
+        logWarning('File Cleanup', 'Failed to clean up input file', { error: cleanupError });
       }
     }
     
@@ -160,9 +160,9 @@ router.post('/', upload.single('audio'), async (req: Request, res: Response) => 
       setTimeout(() => {
         try {
           fs.unlinkSync(responseAudioPath!);
-          console.log(`Cleaned up response file: ${responseAudioPath}`);
+          logInfo('File Cleanup', `Cleaned up response file: ${responseAudioPath}`);
         } catch (cleanupError) {
-          console.error('Failed to clean up response file:', cleanupError);
+          logWarning('File Cleanup', 'Failed to clean up response file', { error: cleanupError });
         }
       }, 1000);
     }

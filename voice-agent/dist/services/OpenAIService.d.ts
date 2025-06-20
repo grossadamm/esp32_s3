@@ -12,7 +12,7 @@ export declare class OpenAIService implements LLMProvider {
     private openai;
     private mcpClient;
     constructor();
-    processText(text: string, tools: Tool[]): Promise<LLMResponse>;
+    processText(text: string, tools: Tool[], isVerbalResponse?: boolean): Promise<LLMResponse>;
     getModelName(): string;
     private convertToOpenAITools;
 }

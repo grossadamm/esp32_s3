@@ -2,7 +2,7 @@
 # Usage: docker compose -f docker-compose.dev.yml up
 
 services:
-  mcp-voice-agent:
+  voice-agent:
     build: .
     ports:
       - "3000:3000"  # Standard port mapping for macOS compatibility

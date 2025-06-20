@@ -67,7 +67,7 @@ ssh "$JETSON_USER@$JETSON_IP" "cd $JETSON_PROJECT_DIR && npm run build"
 
 # Restart GPU container to apply changes
 log_info "Restarting voice agent..."
-ssh "$JETSON_USER@$JETSON_IP" "cd $JETSON_PROJECT_DIR && docker-compose -f docker-compose.gpu.yml restart"
+ssh "$JETSON_USER@$JETSON_IP" "cd $JETSON_PROJECT_DIR && docker compose -f docker-compose.jetson.yml restart voice-agent"
 
 # Quick health check
 log_info "Verifying deployment..."
@@ -78,7 +78,7 @@ if [[ $HEALTH_CHECK == *"ok"* ]] || [[ $HEALTH_CHECK == *"healthy"* ]]; then
     log_success "Voice agent restarted successfully" 
 else
     log_warning "Health check unclear, but deployment completed"
-    log_info "Check logs: ssh $JETSON_USER@$JETSON_IP 'docker logs voice-agent-gpu_voice-agent-gpu_1'"
+    log_info "Check logs: ssh $JETSON_USER@$JETSON_IP 'cd voice-agent-gpu && docker compose -f docker-compose.jetson.yml logs voice-agent'"
 fi
 
 # Calculate timing
@@ -90,5 +90,5 @@ echo -e "🌐 Voice agent: http://$JETSON_IP:3000"
 
 echo -e "\n${BLUE}Quick Commands:${NC}"
 echo "• Monitor: ssh $JETSON_USER@$JETSON_IP './voice-agent-gpu/monitor.sh'"
-echo "• Logs: ssh $JETSON_USER@$JETSON_IP 'docker logs -f voice-agent-gpu_voice-agent-gpu_1'"
+echo "• Logs: ssh $JETSON_USER@$JETSON_IP 'cd voice-agent-gpu && docker compose -f docker-compose.jetson.yml logs -f voice-agent'"
 echo "• Test: curl http://$JETSON_IP:3000/health" 

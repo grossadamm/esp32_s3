@@ -15,7 +15,9 @@
     "clean:dist": "rm -rf voice-agent/dist mcp-servers/*/dist",
     "start:voice": "npm run start --workspace=voice-agent",
     "start:finance-mcp": "npm run start --workspace=mcp-servers/finance-mcp",
+    "start:dev-tools-mcp": "npm run start --workspace=mcp-servers/dev-tools-mcp",
     "dev:finance-mcp": "npm run dev --workspace=mcp-servers/finance-mcp",
+    "dev:dev-tools-mcp": "npm run dev --workspace=mcp-servers/dev-tools-mcp",
 
     "docker:build": "docker compose build",
     "docker:up": "docker compose up -d",

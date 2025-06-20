@@ -334,7 +334,7 @@ docker compose up --build -d
 ```
 
 **Container Service:**
-- **mcp-voice-agent**: Single container with voice agent (port 3000) and MCP servers (STDIO communication)
+- **voice-agent**: Single container with voice agent (port 3000) and MCP servers (STDIO communication)
 
 **Architecture**: All services run within a single container using PM2 process management and STDIO-based MCP communication.
 
@@ -385,10 +385,10 @@ docker compose up -d --build
 docker compose logs -f
 
 # View specific service logs within container
-docker compose logs -f mcp-voice-agent
+docker compose logs -f voice-agent
 
 # Access container shell
-docker compose exec mcp-voice-agent /bin/bash
+docker compose exec voice-agent /bin/bash
 
 # Stop services
 docker compose down
@@ -695,16 +695,16 @@ The Docker setup uses **PM2 for process management** within the single container
 **PM2 Commands in Container:**
 ```bash
 # View process status
-docker compose exec mcp-voice-agent pm2 status
+docker compose exec voice-agent pm2 status
 
 # View logs
-docker compose exec mcp-voice-agent pm2 logs
+docker compose exec voice-agent pm2 logs
 
 # Restart voice agent
-docker compose exec mcp-voice-agent pm2 restart voice-agent
+docker compose exec voice-agent pm2 restart voice-agent
 
 # Monitor processes
-docker compose exec mcp-voice-agent pm2 monit
+docker compose exec voice-agent pm2 monit
 ```
 
 **MCP Server Communication:**
@@ -743,7 +743,7 @@ Import live financial data from Monarch Money:
 
 ```bash
 # Docker environment
-docker compose exec mcp-voice-agent sh -c "cd /app && MONARCH_TOKEN=your_token npx tsx mcp-servers/finance-mcp/src/MonarchSync.ts"
+docker compose exec voice-agent sh -c "cd /app && MONARCH_TOKEN=your_token npx tsx mcp-servers/finance-mcp/src/MonarchSync.ts"
 
 # Local environment  
 cd mcp-servers/finance-mcp
@@ -954,7 +954,7 @@ View container logs:
 docker compose logs -f
 
 # Specific service logs
-docker compose logs -f mcp-voice-agent
+docker compose logs -f voice-agent
 ```
 
 Check service status:
@@ -980,7 +980,7 @@ nvidia-smi -l 1
 docker stats
 
 # Voice agent process monitoring
-docker compose exec mcp-voice-agent pm2 monit
+docker compose exec voice-agent pm2 monit
 ```
 
 ## Recent Updates ✨

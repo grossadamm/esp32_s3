@@ -68,72 +68,42 @@ scp .env "$JETSON_USER@$JETSON_IP:~/$JETSON_PROJECT_DIR/" 2>/dev/null || \
 
 # Phase 2: ARM Dependency Builds (The expensive part)
 log_warning "Building ARM dependencies (20-25 minutes)..."
-log_info "Root dependencies..."
 ssh "$JETSON_USER@$JETSON_IP" "cd $JETSON_PROJECT_DIR && npm ci"
-
-log_info "Voice agent dependencies..."
-ssh "$JETSON_USER@$JETSON_IP" "cd $JETSON_PROJECT_DIR/voice-agent && npm ci"
-
-log_info "Finance MCP dependencies..."
-ssh "$JETSON_USER@$JETSON_IP" "cd $JETSON_PROJECT_DIR/mcp-servers/finance-mcp && npm ci"
-
-log_info "Dev tools MCP dependencies..."
-ssh "$JETSON_USER@$JETSON_IP" "cd $JETSON_PROJECT_DIR/mcp-servers/dev-tools-mcp && npm ci"
 
 # Phase 3: Initial TypeScript Builds
 log_info "Building TypeScript projects..."
 ssh "$JETSON_USER@$JETSON_IP" "cd $JETSON_PROJECT_DIR && npm run build"
-ssh "$JETSON_USER@$JETSON_IP" "cd $JETSON_PROJECT_DIR/voice-agent && npm run build"
-ssh "$JETSON_USER@$JETSON_IP" "cd $JETSON_PROJECT_DIR/mcp-servers/finance-mcp && npm run build"
-ssh "$JETSON_USER@$JETSON_IP" "cd $JETSON_PROJECT_DIR/mcp-servers/dev-tools-mcp && npm run build"
 
 # Phase 4: GPU Container Setup
 log_info "Setting up GPU container environment..."
 
-# Create GPU-enabled docker-compose file
-ssh "$JETSON_USER@$JETSON_IP" "cat > ~/$JETSON_PROJECT_DIR/docker-compose.gpu.yml << 'EOF'
-version: '3.8'
-services:
-  voice-agent-gpu:
-    image: dustynv/l4t-pytorch:r36.4.0
-    runtime: nvidia
-    network_mode: host
-    working_dir: /app
-    volumes:
-      - ./:/app
-    command: node voice-agent/dist/index.js
-    environment:
-      - NODE_ENV=production
-      - GPU_ENABLED=true
-    restart: unless-stopped
-EOF"
-
-# Pull GPU base image
-log_info "Pulling GPU base image..."
-ssh "$JETSON_USER@$JETSON_IP" "docker pull dustynv/l4t-pytorch:r36.4.0"
-
-# Start the container
+# Start the container using existing docker-compose.jetson.yml
 log_info "Starting GPU voice agent..."
-ssh "$JETSON_USER@$JETSON_IP" "cd $JETSON_PROJECT_DIR && docker-compose -f docker-compose.gpu.yml up -d"
+ssh "$JETSON_USER@$JETSON_IP" "cd $JETSON_PROJECT_DIR && docker compose -f docker-compose.jetson.yml up -d voice-agent"
 
 # Wait for startup
 sleep 15
 
 # Phase 5: Integration Testing
 log_info "Testing deployment..."
-HEALTH_CHECK=$(ssh "$JETSON_USER@$JETSON_IP" "curl -s http://localhost:3000/health" || echo "failed")
+CONTAINER_NAME=$(ssh "$JETSON_USER@$JETSON_IP" "cd $JETSON_PROJECT_DIR && docker compose -f docker-compose.jetson.yml ps -q voice-agent")
 
-if [[ $HEALTH_CHECK == *"ok"* ]] || [[ $HEALTH_CHECK == *"healthy"* ]]; then
-    log_success "Voice agent is running successfully"
+if [[ -n "$CONTAINER_NAME" ]]; then
+    log_success "Voice agent container is running"
+    
+    # Wait for startup and test health
+    sleep 10
+    HEALTH_CHECK=$(ssh "$JETSON_USER@$JETSON_IP" "curl -s http://localhost:3000/health" || echo "failed")
+    
+    if [[ $HEALTH_CHECK == *"ok"* ]] || [[ $HEALTH_CHECK == *"healthy"* ]]; then
+        log_success "Voice agent is responding successfully"
+    else
+        log_warning "Health check unclear, but container is running"
+    fi
 else
-    log_warning "Health check unclear, checking container..."
-    ssh "$JETSON_USER@$JETSON_IP" "docker logs voice-agent-gpu_voice-agent-gpu_1 --tail 10"
+    log_error "Container failed to start"
+    ssh "$JETSON_USER@$JETSON_IP" "cd $JETSON_PROJECT_DIR && docker compose -f docker-compose.jetson.yml logs voice-agent --tail 20"
 fi
-
-# Test GPU access
-log_info "Verifying GPU access..."
-GPU_STATUS=$(ssh "$JETSON_USER@$JETSON_IP" "docker exec voice-agent-gpu_voice-agent-gpu_1 python3 -c 'import torch; print(torch.cuda.is_available())' 2>/dev/null" || echo "unknown")
-log_info "CUDA available: $GPU_STATUS"
 
 # Mark setup complete
 ssh "$JETSON_USER@$JETSON_IP" "echo 'Setup completed: $(date)' > $JETSON_PROJECT_DIR/.setup-complete"
@@ -142,7 +112,7 @@ ssh "$JETSON_USER@$JETSON_IP" "echo 'Setup completed: $(date)' > $JETSON_PROJECT
 ssh "$JETSON_USER@$JETSON_IP" "cat > ~/$JETSON_PROJECT_DIR/monitor.sh << 'EOF'
 #!/bin/bash
 echo '🔍 Voice Agent Status:'
-docker ps | grep voice-agent-gpu || echo 'Container not running'
+cd ~/voice-agent-gpu && docker compose -f docker-compose.jetson.yml ps voice-agent
 echo ''
 echo '🖥️  GPU Status:'
 nvidia-smi --query-gpu=name,utilization.gpu,memory.used --format=csv,noheader
@@ -165,7 +135,7 @@ After making code changes on your Mac:
 ## Monitoring
 \`\`\`bash
 ./monitor.sh                    # System status
-docker logs -f voice-agent-gpu_voice-agent-gpu_1  # Live logs
+docker compose -f docker-compose.jetson.yml logs -f voice-agent  # Live logs
 curl http://localhost:3000/health  # Health check
 \`\`\`
 
@@ -200,7 +170,7 @@ echo "2. Monitor system:"
 echo "   ssh $JETSON_USER@$JETSON_IP './voice-agent-gpu/monitor.sh'"
 echo ""
 echo "3. View logs:"
-echo "   ssh $JETSON_USER@$JETSON_IP 'docker logs -f voice-agent-gpu_voice-agent-gpu_1'"
+echo "   ssh $JETSON_USER@$JETSON_IP 'cd voice-agent-gpu && docker compose -f docker-compose.jetson.yml logs -f voice-agent'"
 
 echo -e "\n${YELLOW}Performance Testing:${NC}"
 echo "• Upload audio via web UI at http://$JETSON_IP:3000"

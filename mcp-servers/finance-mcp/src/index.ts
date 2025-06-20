@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
-// Finance MCP Server - Placeholder
-// TODO: Extract finance functionality from voice-agent/src/services/MCPClient.ts
+// Finance MCP Server
+// Provides financial analysis tools and database access via MCP protocol
 
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';

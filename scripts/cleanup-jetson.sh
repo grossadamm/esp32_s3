@@ -79,7 +79,7 @@ docker rm -f $(docker ps -aq) 2>/dev/null || echo "No containers to remove"
 
 # Remove MCP voice agent related images
 echo "Removing MCP voice agent images..."
-docker rmi $(docker images | grep -E "mcp-voice-agent|voice-agent" | awk '{print $3}') 2>/dev/null || echo "No MCP images to remove"
+docker rmi $(docker images | grep -E "voice-agent" | awk '{print $3}') 2>/dev/null || echo "No voice-agent images to remove"
 
 # Remove old/unused images (keep dusty-nv images)
 echo "Removing dangling images..."

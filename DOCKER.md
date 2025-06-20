@@ -71,10 +71,10 @@ npm run docker:dev
 
 Inside the container, PM2 manages the voice agent process:
 
-- View status: `docker compose exec mcp-voice-agent pm2 status`
-- View logs: `docker compose exec mcp-voice-agent pm2 logs`
-- Restart voice agent: `docker compose exec mcp-voice-agent pm2 restart voice-agent`
-- Monitor processes: `docker compose exec mcp-voice-agent pm2 monit`
+- View status: `docker compose exec voice-agent pm2 status`
+- View logs: `docker compose exec voice-agent pm2 logs`
+- Restart voice agent: `docker compose exec voice-agent pm2 restart voice-agent`
+- Monitor processes: `docker compose exec voice-agent pm2 monit`
 
 **MCP Server Management:**
 - MCP servers are spawned automatically by the voice agent as needed
@@ -155,16 +155,16 @@ The main service includes health checks on port 3000. The voice agent implements
 To access the container for debugging:
 ```bash
 # Execute commands inside the container
-docker compose exec mcp-voice-agent /bin/bash
+docker compose exec voice-agent /bin/bash
 
 # Check PM2 status
-docker compose exec mcp-voice-agent pm2 status
+docker compose exec voice-agent pm2 status
 
 # View application structure
-docker compose exec mcp-voice-agent ls -la /app
+docker compose exec voice-agent ls -la /app
 
 # Run MCP tools directly for testing
-docker compose exec mcp-voice-agent node mcp-servers/finance-mcp/dist/index.js
+docker compose exec voice-agent node mcp-servers/finance-mcp/dist/index.js
 ```
 
 ## Development vs Production Differences

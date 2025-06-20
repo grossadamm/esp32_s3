@@ -1,5 +1,5 @@
 services:
-  mcp-voice-agent:
+  voice-agent:
     build: .
     ports:
       - "3000:3000"

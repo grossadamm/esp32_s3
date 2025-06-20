@@ -55,6 +55,7 @@ fi
 log_info "Syncing code changes..."
 rsync -av --delete \
     --exclude node_modules \
+    --exclude .setup-complete \
     --exclude .git \
     --exclude logs \
     --exclude uploads \

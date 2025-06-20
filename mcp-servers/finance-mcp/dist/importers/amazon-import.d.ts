@@ -68,7 +68,7 @@ export declare class SimpleAmazonImporter {
         processed: number;
         imported: number;
     }>;
-    private parseDigitalOrderRow;
+    private parseDigitalMonetaryRow;
     private parseDigitalRefundRow;
     clearTables(): Promise<void>;
     close(): void;

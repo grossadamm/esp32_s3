@@ -494,44 +494,30 @@ export class SimpleAmazonImporter {
       columns: true, skip_empty_lines: true, trim: true, relax_quotes: true, escape: '"'
     });
 
-    // Group monetary records by DeliveryPacketId
-    const monetaryByPacket = new Map<string, any[]>();
-    for (const monetary of monetaryRecords) {
-      const packetId = monetary.DeliveryPacketId;
-      if (!monetaryByPacket.has(packetId)) {
-        monetaryByPacket.set(packetId, []);
+    // Create lookup for orders by DeliveryPacketId
+    const ordersByPacket = new Map<string, any>();
+    for (const order of ordersRecords) {
+      if (order.DeliveryPacketId) {
+        ordersByPacket.set(order.DeliveryPacketId, order);
       }
-      monetaryByPacket.get(packetId)!.push(monetary);
     }
 
     let processed = 0;
     let imported = 0;
 
-    for (const order of ordersRecords) {
+    // Process monetary records directly (they contain the actual transactions)
+    for (const monetary of monetaryRecords) {
       processed++;
       
-      const packetId = order.DeliveryPacketId;
-      const monetaryTransactions = monetaryByPacket.get(packetId) || [];
+      const amount = this.parseAmount(monetary.TransactionAmount);
       
-      // Calculate total amount for this order
-      let totalAmount = 0;
-      const components: any[] = [];
-      
-      for (const monetary of monetaryTransactions) {
-        const amount = this.parseAmount(monetary.TransactionAmount);
-        totalAmount += amount;
-        components.push({
-          type: monetary.MonetaryComponentTypeCode,
-          amount: amount,
-          currency: monetary.BaseCurrencyCode
-        });
-      }
-      
-      // Skip if no monetary transactions or zero amount
-      if (totalAmount === 0) continue;
+      // Skip zero amounts (free items, promotions, etc.)
+      if (amount === 0) continue;
       
       try {
-        const transaction = this.parseDigitalOrderRow(order, totalAmount, components);
+        const order = ordersByPacket.get(monetary.DeliveryPacketId);
+        const transaction = this.parseDigitalMonetaryRow(monetary, order);
+        
         if (transaction) {
           const existing = await this.db.get(
             'SELECT id FROM amazon_transactions WHERE transaction_id = ?',
@@ -556,7 +542,7 @@ export class SimpleAmazonImporter {
           }
         }
       } catch (error) {
-        console.error(`❌ Error processing digital order record ${processed}:`, error);
+        console.error(`❌ Error processing digital monetary record ${processed}:`, error);
       }
     }
 
@@ -575,29 +561,35 @@ export class SimpleAmazonImporter {
     return await this.importFile(refundsPath, 'digital_refund');
   }
 
-  private parseDigitalOrderRow(order: any, amount: number, components: any[]): AmazonTransaction {
-    const orderId = order.OrderId;
-    const orderDate = this.parseDate(order.OrderDate);
+  private parseDigitalMonetaryRow(monetary: any, order?: any): AmazonTransaction {
+    const amount = this.parseAmount(monetary.TransactionAmount);
+    const packetId = monetary.DeliveryPacketId;
+    const componentType = monetary.MonetaryComponentTypeCode || 'Purchase';
     
-    if (!orderId || !orderDate || orderId.trim() === '' || orderDate.trim() === '') {
-      console.log(`⚠️  Digital order missing fields - OrderId: "${orderId}", OrderDate: "${order.OrderDate}" -> parsed: "${orderDate}"`);
-      throw new Error('Missing required digital order fields');
+    if (!packetId) {
+      throw new Error('Missing required DeliveryPacketId');
     }
 
+    // Use order info if available, otherwise use monetary data
+    const orderId = order?.OrderId || packetId;
+    const orderDate = order ? (this.parseDate(order.OrderDate) || new Date().toISOString().split('T')[0]) : new Date().toISOString().split('T')[0];
+    const marketplace = order?.Marketplace || 'Amazon Digital';
+
     return {
-      transaction_id: `digital_${orderId}`,
+      transaction_id: `digital_${packetId}_${monetary.DigitalOrderItemId || 'item'}`,
       transaction_type: 'digital_purchase',
       date: orderDate,
-      status: order.OrderStatus || 'Unknown',
-      product_name: `Digital Purchase: ${order.Marketplace || 'Amazon'}`,
+      status: order?.OrderStatus || 'SUCCESS',
+      product_name: `Digital ${componentType}: ${marketplace}`,
       amount: -Math.abs(amount), // Digital purchases are negative (money out)
       details: JSON.stringify({
-        marketplace: order.Marketplace,
-        delivery_packet_id: order.DeliveryPacketId,
-        order_status: order.OrderStatus,
-        components: components,
-        country_code: order.CountryCode,
-        subscription_type: order.SubscriptionOrderType
+        delivery_packet_id: packetId,
+        digital_item_id: monetary.DigitalOrderItemId,
+        component_type: componentType,
+        currency: monetary.BaseCurrencyCode,
+        marketplace: marketplace,
+        order_id: orderId,
+        offer_type: monetary.OfferTypeCode
       })
     };
   }

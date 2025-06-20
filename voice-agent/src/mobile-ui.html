@@ -264,7 +264,7 @@
         const transcription = document.getElementById('transcription');
         const recordText = document.getElementById('recordText');
 
-        // 🧠 VAD MANAGER  
+        // 🧠 VAD MANAGER (using official MicVAD API)
         async function initializeVAD() {
             try {
                 console.log('🧠 Loading VAD model...');
@@ -282,24 +282,32 @@
                     throw new Error('VAD library not found. Available: ' + Object.keys(window).filter(k => k.toLowerCase().includes('vad')).join(', '));
                 }
                 
-                console.log('Using vad.MicVAD API');
+                console.log('Using official vad.MicVAD API');
                 
-                // Create VAD instance for manual audio processing
-                // We'll use NonRealTimeVAD since we want to manually feed audio data
-                if (window.vad.NonRealTimeVAD) {
-                    vad = await window.vad.NonRealTimeVAD.new();
-                    console.log('✅ NonRealTimeVAD loaded and ready');
-                } else {
-                    // Fallback: try to create a basic VAD instance
-                    vad = await window.vad.MicVAD.new({
-                        onSpeechStart: () => console.log('VAD: Speech start'),
-                        onSpeechEnd: () => console.log('VAD: Speech end'),
-                        onVADMisfire: () => console.log('VAD: Misfire'),
-                    });
-                    console.log('✅ MicVAD loaded as fallback');
-                }
+                // Create VAD instance using the official API pattern
+                vad = await window.vad.MicVAD.new({
+                    onSpeechStart: () => {
+                        console.log('🗣️ VAD: Speech start detected');
+                        isSpeaking = true;
+                        updateStatus('Speaking...', 'speaking');
+                    },
+                    onSpeechEnd: (audio) => {
+                        console.log('🤫 VAD: Speech end detected, audio length:', audio.length);
+                        isSpeaking = false;
+                        updateStatus('Processing...', 'connected');
+                        
+                        // Send the detected speech audio to the server
+                        if (ws && ws.readyState === WebSocket.OPEN) {
+                            sendAudioToServer(audio);
+                        }
+                    },
+                    onVADMisfire: () => {
+                        console.log('⚠️ VAD: Misfire detected');
+                    }
+                });
                 
                 vadReady = true;
+                console.log('✅ MicVAD loaded and ready');
                 updateStatus('VAD Ready', 'vad-ready');
                 return true;
                 
@@ -308,6 +316,31 @@
                 console.log('Available window objects:', Object.getOwnPropertyNames(window).filter(name => name.toLowerCase().includes('vad')));
                 updateStatus('VAD Failed - Continuing without', 'connected');
                 return false;
+            }
+        }
+
+        // Helper function to send audio data to server
+        function sendAudioToServer(audioFloat32Array) {
+            try {
+                // Convert Float32Array to PCM16 for OpenAI compatibility
+                const pcmData = new Int16Array(audioFloat32Array.length);
+                for (let i = 0; i < audioFloat32Array.length; i++) {
+                    pcmData[i] = Math.max(-32768, Math.min(32767, audioFloat32Array[i] * 32767));
+                }
+                
+                // Convert to base64
+                const uint8Array = new Uint8Array(pcmData.buffer);
+                const base64Audio = btoa(String.fromCharCode.apply(null, uint8Array));
+                
+                // Send to server
+                ws.send(JSON.stringify({
+                    type: 'audio_chunk',
+                    audio: base64Audio
+                }));
+                
+                console.log('📤 Sent audio chunk to server:', pcmData.length, 'samples');
+            } catch (error) {
+                console.error('❌ Error sending audio to server:', error);
             }
         }
 
@@ -393,6 +426,16 @@
             
             // Stop any currently playing audio
             stopAllAudio();
+            
+            // Clean up VAD instance
+            if (vad && typeof vad.pause === 'function') {
+                try {
+                    vad.pause();
+                    console.log('🧹 VAD cleaned up on disconnect');
+                } catch (error) {
+                    console.warn('Error cleaning up VAD:', error);
+                }
+            }
             
             // Reset VAD state
             isSpeaking = false;
@@ -714,10 +757,6 @@
             }
         }
 
-        let audioWorkletNode = null;
-        let recordingStream = null;
-        let vadContext = null;
-
         async function startRecording() {
             try {
                 // Stop any currently playing audio before recording
@@ -726,7 +765,36 @@
                 // Ensure audio context is ready for playback (iOS requirement)
                 await initializeAudio();
                 
-                // Check permission first
+                // Check if VAD is ready and use it, otherwise fall back to basic recording
+                if (vadReady && vad) {
+                    console.log('🎤 Starting VAD-powered recording');
+                    
+                    // Use the official VAD API - it handles microphone access automatically
+                    await vad.start();
+                    
+                    isRecording = true;
+                    updateStatus('Listening...', 'recording');
+                    updateUI();
+                    
+                    console.log('✅ VAD recording started - waiting for speech detection');
+                    
+                } else {
+                    // Fallback to basic recording without VAD
+                    console.log('⚠️ VAD not available, using basic recording');
+                    await startBasicRecording();
+                }
+                
+            } catch (error) {
+                console.error('Error starting VAD recording:', error);
+                // Fallback to basic recording if VAD fails
+                console.log('🔄 Falling back to basic recording');
+                await startBasicRecording();
+            }
+        }
+
+        // Fallback basic recording without VAD
+        async function startBasicRecording() {
+            try {
                 const permissionState = await checkMicrophonePermission();
                 
                 if (permissionState === 'denied') {
@@ -735,155 +803,69 @@
                     return;
                 }
 
-                // Get audio stream with proper format for VAD (16kHz) and OpenAI (24kHz conversion)
-                recordingStream = await navigator.mediaDevices.getUserMedia({
+                const recordingStream = await navigator.mediaDevices.getUserMedia({
                     audio: {
-                        sampleRate: 16000,  // VAD works best with 16kHz
-                        channelCount: 1,    // Mono
+                        sampleRate: 24000,  // Match OpenAI requirements
+                        channelCount: 1,
                         echoCancellation: true,
                         noiseSuppression: true,
                         autoGainControl: true
                     }
                 });
 
-                // Create separate audio contexts for VAD (16kHz) and OpenAI (24kHz)
-                vadContext = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 16000 });
-                const source = vadContext.createMediaStreamSource(recordingStream);
+                const audioContext = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 24000 });
+                const source = audioContext.createMediaStreamSource(recordingStream);
+                const processor = audioContext.createScriptProcessor(2048, 1, 1);
                 
-                // Create a script processor for VAD processing
-                const processor = vadContext.createScriptProcessor(4096, 1, 1);
-                
-                processor.onaudioprocess = async (event) => {
+                processor.onaudioprocess = (event) => {
                     if (!isRecording || !ws || ws.readyState !== WebSocket.OPEN) return;
                     
                     const inputBuffer = event.inputBuffer;
-                    const audioData = inputBuffer.getChannelData(0);
+                    const inputData = inputBuffer.getChannelData(0);
                     
-                    // 🎤 VAD CHECK - Only send if speech detected (or always if VAD disabled)
-                    let shouldSendAudio = true;
-                    if (vadReady && vad) {
-                        try {
-                            let speechProbability = 0;
-                            
-                            // Handle ricky0123/vad-web API patterns
-                            if (vad && typeof vad.processPCMFloat32 === 'function') {
-                                // NonRealTimeVAD API - process Float32Array directly
-                                const vadResult = await vad.processPCMFloat32(audioData);
-                                speechProbability = vadResult.isSpeech ? 1.0 : 0.0;
-                            } else if (vad && typeof vad.process === 'function') {
-                                // Alternative process method
-                                speechProbability = await vad.process(audioData);
-                            } else {
-                                console.warn('Unknown VAD API format:', typeof vad, Object.keys(vad || {}));
-                                shouldSendAudio = true; // Fallback to always send
-                            }
-                            
-                            const isCurrentlySpeaking = speechProbability > 0.5; // Threshold
-                            
-                            if (isCurrentlySpeaking !== isSpeaking) {
-                                isSpeaking = isCurrentlySpeaking;
-                                if (isSpeaking) {
-                                    console.log('🗣️ Speech detected (VAD)', speechProbability);
-                                    updateStatus('Speaking...', 'speaking');
-                                } else {
-                                    console.log('🤫 Speech ended (VAD)', speechProbability);
-                                    updateStatus('Recording...', 'recording');
-                                }
-                            }
-                            
-                            shouldSendAudio = isSpeaking;
-                        } catch (vadError) {
-                            console.warn('VAD processing error:', vadError);
-                            // Continue without VAD filtering
-                            shouldSendAudio = true;
-                        }
+                    // Convert float32 to int16 (PCM16)
+                    const pcmData = new Int16Array(inputData.length);
+                    for (let i = 0; i < inputData.length; i++) {
+                        pcmData[i] = Math.max(-32768, Math.min(32767, inputData[i] * 32767));
                     }
                     
-                    // Only send audio when VAD detects speech (or VAD is disabled)
-                    if (shouldSendAudio) {
-                        // Resample from 16kHz to 24kHz for OpenAI compatibility
-                        const resampledData = resampleAudio(audioData, 16000, 24000);
-                        
-                        // Convert float32 to int16 (PCM16)
-                        const pcmData = new Int16Array(resampledData.length);
-                        for (let i = 0; i < resampledData.length; i++) {
-                            // Convert from -1,1 float to -32768,32767 int16
-                            pcmData[i] = Math.max(-32768, Math.min(32767, resampledData[i] * 32767));
-                        }
-                        
-                        // Convert to base64
-                        const uint8Array = new Uint8Array(pcmData.buffer);
-                        const base64Audio = btoa(String.fromCharCode.apply(null, uint8Array));
-                        
-                        // Send to server
-                        ws.send(JSON.stringify({
-                            type: 'audio_chunk',
-                            audio: base64Audio
-                        }));
-                    }
+                    // Convert to base64 and send
+                    const uint8Array = new Uint8Array(pcmData.buffer);
+                    const base64Audio = btoa(String.fromCharCode.apply(null, uint8Array));
+                    
+                    ws.send(JSON.stringify({
+                        type: 'audio_chunk',
+                        audio: base64Audio
+                    }));
                 };
                 
                 source.connect(processor);
-                processor.connect(vadContext.destination);
+                processor.connect(audioContext.destination);
                 
-                audioWorkletNode = processor;
                 isRecording = true;
-                updateStatus('Recording...', 'recording');
+                updateStatus('Recording (basic)...', 'recording');
                 updateUI();
                 
-                console.log('Started recording with VAD-enabled PCM16 processing');
+                console.log('✅ Basic recording started (no VAD)');
                 
             } catch (error) {
-                console.error('Error starting recording:', error);
+                console.error('Error starting basic recording:', error);
                 handleMicrophoneError(error);
             }
-        }
-
-        // Simple audio resampling function
-        function resampleAudio(inputBuffer, inputSampleRate, outputSampleRate) {
-            if (inputSampleRate === outputSampleRate) {
-                return inputBuffer;
-            }
-            
-            const ratio = outputSampleRate / inputSampleRate;
-            const outputLength = Math.round(inputBuffer.length * ratio);
-            const outputBuffer = new Float32Array(outputLength);
-            
-            for (let i = 0; i < outputLength; i++) {
-                const inputIndex = i / ratio;
-                const index = Math.floor(inputIndex);
-                const fraction = inputIndex - index;
-                
-                if (index + 1 < inputBuffer.length) {
-                    outputBuffer[i] = inputBuffer[index] * (1 - fraction) + inputBuffer[index + 1] * fraction;
-                } else {
-                    outputBuffer[i] = inputBuffer[index];
-                }
-            }
-            
-            return outputBuffer;
         }
 
         function stopRecording() {
             if (isRecording) {
                 isRecording = false;
                 
-                // Clean up Web Audio API resources
-                if (audioWorkletNode) {
-                    audioWorkletNode.disconnect();
-                    audioWorkletNode = null;
-                }
-                
-                // Clean up VAD context
-                if (vadContext) {
-                    vadContext.close();
-                    vadContext = null;
-                }
-                
-                // Stop the recording stream
-                if (recordingStream) {
-                    recordingStream.getTracks().forEach(track => track.stop());
-                    recordingStream = null;
+                // Stop VAD if it's running
+                if (vadReady && vad && typeof vad.pause === 'function') {
+                    try {
+                        vad.pause();
+                        console.log('🛑 VAD recording stopped');
+                    } catch (error) {
+                        console.warn('Error stopping VAD:', error);
+                    }
                 }
                 
                 // Reset VAD state
@@ -892,7 +874,7 @@
                 updateStatus('Connected', 'connected');
                 updateUI();
                 
-                console.log('Stopped recording and cleaned up VAD resources');
+                console.log('🛑 Recording stopped');
             }
         }
 

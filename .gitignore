@@ -5,8 +5,10 @@ node_modules/
 # Build outputs
 dist/
 */dist/
+**/dist/
 build/
 */build/
+**/build/
 
 # Environment files
 .env
@@ -31,6 +33,14 @@ pids/
 *.temp
 temp/
 tmp/
+
+# Debug and test files
+debug-*.js
+test-*.js
+clear-*.js
+**/debug-*.js
+**/test-*.js
+**/clear-*.js
 
 # Audio test files (allow specific test files)
 *.mp3

@@ -36,10 +36,8 @@
   "license": "MIT",
   "devDependencies": {
     "tsx": "^4.6.0",
-    "typescript": "^5.3.0"
+    "typescript": "^5.6.0"
   },
   "dependencies": {
-    "express": "^5.1.0",
-    "http-proxy-middleware": "^3.0.5"
   }
 }

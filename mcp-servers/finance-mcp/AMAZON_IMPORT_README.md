@@ -26,8 +26,12 @@ This feature allows you to import Amazon transaction data (orders, returns, and 
 ├── Digital-Ordering.1/
 │   ├── Digital Orders.csv                   # Digital orders
 │   └── Digital Orders Monetary.csv          # Digital financial transactions
-└── Digital.Orders.Returns.1/
-    └── Digital.Orders.Returns.Monetary.1.csv # Digital refunds
+├── Digital.Orders.Returns.1/
+│   └── Digital.Orders.Returns.Monetary.1.csv # Digital refunds
+└── Retail.Orders&Returns.Concessions/
+    └── datasets/
+        └── OrdersAndReturns.CSConcessions.Concessions/
+            └── OrdersAndReturns.CSConcessions.Concessions.csv # Customer service concessions
 ```
 
 ## Usage
@@ -58,7 +62,7 @@ await listAmazonTransactions('return', 365, 'Completed');
 ### amazon_transactions
 - `id` - Primary key
 - `transaction_id` - Unique identifier (orderID_asin for multi-item orders)
-- `transaction_type` - 'order', 'return', 'rental', 'refund', 'digital_purchase', 'digital_refund'
+- `transaction_type` - 'order', 'return', 'rental', 'refund', 'digital_purchase', 'digital_refund', 'concession'
 - `date` - Transaction date (YYYY-MM-DD)
 - `status` - Order status, return status, etc.
 - `product_name` - Product description
@@ -87,6 +91,7 @@ await listAmazonTransactions('return', 365, 'Completed');
 - **rental**: Amazon rental services (e.g., textbook rentals)
 - **digital_purchase**: Digital content (e-books, music, movies, apps)
 - **digital_refund**: Digital content refunds
+- **concession**: Customer service replacements and credits ($0 financial impact)
 
 **Example Queries:**
 ```sql
@@ -129,7 +134,7 @@ Imports all Amazon transaction data from CSV files.
 Lists Amazon transactions with filtering options.
 
 **Parameters:**
-- `transaction_type` (optional): 'order', 'return', 'rental', 'refund', 'digital_purchase', 'digital_refund', or 'all'
+- `transaction_type` (optional): 'order', 'return', 'rental', 'refund', 'digital_purchase', 'digital_refund', 'concession', or 'all'
   - Default: 'all'
 - `days_back` (optional): Number of days to look back
   - Default: 30
@@ -156,6 +161,7 @@ Lists Amazon transactions with filtering options.
 - **Rentals**: 1/1 imported (100% success rate)
 - **Digital Orders**: 491/1,084 imported (45.3% success rate - skips duplicate monetary components)
 - **Digital Refunds**: 4/7 imported (57.1% success rate)
+- **Concessions**: 637/656 imported (97.1% success rate - customer service credits/replacements)
 
 **Key Improvements Made:**
 - **Multi-item Orders**: Fixed duplicate Order ID handling using `orderID_asin` unique keys
@@ -168,4 +174,4 @@ Lists Amazon transactions with filtering options.
 - **Digital Content**: Includes $0 transactions (Kindle Unlimited, Prime Video, promotions)
 - **Amount Formats**: Handles complex Amazon CSV formats like `"'-0.7'"` and `"$14.52"`
 - **Date Formats**: Supports ISO 8601 and other common formats
-- **Total Typical Import**: ~4,800+ transactions representing $80k+ in activity 
+- **Total Typical Import**: ~5,450+ transactions representing $87k+ in activity 

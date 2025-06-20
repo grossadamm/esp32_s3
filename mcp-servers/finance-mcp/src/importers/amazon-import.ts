@@ -511,8 +511,7 @@ export class SimpleAmazonImporter {
       
       const amount = this.parseAmount(monetary.TransactionAmount);
       
-      // Skip zero amounts (free items, promotions, etc.)
-      if (amount === 0) continue;
+      // Import ALL transactions including $0 (free items, promotions, Kindle Unlimited, etc.)
       
       try {
         const order = ordersByPacket.get(monetary.DeliveryPacketId);
@@ -580,7 +579,7 @@ export class SimpleAmazonImporter {
       transaction_type: 'digital_purchase',
       date: orderDate,
       status: order?.OrderStatus || 'SUCCESS',
-      product_name: `Digital ${componentType}: ${marketplace}`,
+      product_name: amount === 0 ? `Free Digital ${componentType}: ${marketplace}` : `Digital ${componentType}: ${marketplace}`,
       amount: -Math.abs(amount), // Digital purchases are negative (money out)
       details: JSON.stringify({
         delivery_packet_id: packetId,

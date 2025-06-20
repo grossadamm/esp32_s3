@@ -249,21 +249,26 @@ export class SimpleAmazonImporter {
 
   private parseOrderRow(row: any): AmazonTransaction {
     const orderId = row['Order ID'];
-    const orderDate = this.parseDate(row['Order Date']);
+    const orderDate = this.parseDate(row['Order Date']) || '1900-01-01'; // Fallback for invalid dates
     const totalOwed = this.parseAmount(row['Total Owed']);
     
-    if (!orderId || !orderDate) {
-      throw new Error('Missing required order fields');
+    if (!orderId) {
+      throw new Error('Missing required Order ID');
     }
 
+    // Make transaction_id unique by including ASIN to handle multiple items per order
+    const asin = row['ASIN'] || 'unknown';
+    const productName = row['Product Name'] || 'Unknown Product';
+    
     return {
-      transaction_id: orderId,
+      transaction_id: `${orderId}_${asin}`,
       transaction_type: 'order',
       date: orderDate,
       status: row['Order Status'] || 'Unknown',
-      product_name: row['Product Name'] || 'Unknown Product',
+      product_name: productName,
       amount: -Math.abs(totalOwed), // Orders are negative (money out)
       details: JSON.stringify({
+        asin: asin,
         shipment_status: row['Shipment Status'],
         ship_date: this.parseDate(row['Ship Date']),
         carrier: row['Carrier Name & Tracking Number'],
@@ -594,9 +599,14 @@ export class SimpleAmazonImporter {
   }
 
   private parseDigitalRefundRow(row: any): AmazonTransaction {
-    const packetId = row.DeliveryPacketId;
-    const orderId = row.OrderId;
-    const refundDate = this.parseDate(row.OrderDate) || new Date().toISOString().split('T')[0];
+    // Handle BOM character in CSV - first key might have UTF-8 BOM prefix
+    const keys = Object.keys(row);
+    const packetIdKey = keys.find(key => key.includes('DeliveryPacketId')) || 'DeliveryPacketId';
+    const orderIdKey = keys.find(key => key.includes('OrderId')) || 'OrderId';
+    
+    const packetId = row[packetIdKey];
+    const orderId = row[orderIdKey];
+    const refundDate = new Date().toISOString().split('T')[0]; // No date field in CSV, use current date
     const refundAmount = this.parseAmount(row.TransactionAmount);
     
     if (!packetId || !orderId) {
@@ -604,7 +614,7 @@ export class SimpleAmazonImporter {
     }
 
     return {
-      transaction_id: `digital_refund_${packetId}`,
+      transaction_id: `digital_refund_${packetId}_${row.DigitalOrderItemId || 'item'}`,
       transaction_type: 'digital_refund',
       date: refundDate,
       status: 'Refunded',
@@ -613,6 +623,7 @@ export class SimpleAmazonImporter {
       details: JSON.stringify({
         original_order_id: orderId,
         delivery_packet_id: packetId,
+        digital_item_id: row.DigitalOrderItemId,
         reason_code: row.ReasonCode,
         condition_code: row.ConditionCode,
         currency: row.BaseCurrencyCode,

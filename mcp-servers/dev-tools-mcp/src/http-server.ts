@@ -2,40 +2,15 @@
 
 import { createServer, IncomingMessage, ServerResponse } from 'http';
 import sqlite3 from 'sqlite3';
-import { promisify } from 'util';
 import path from 'path';
 import fs from 'fs';
+import { DatabaseWrapper } from './utils/DatabaseWrapper.js';
 
 interface Project {
   id: number;
   name: string;
   created_at: string;
   updated_at: string;
-}
-
-class DatabaseWrapper {
-  private db: sqlite3.Database;
-  public all: (sql: string, params?: any[]) => Promise<any[]>;
-  public get: (sql: string, params?: any[]) => Promise<any>;
-  public run: (sql: string, params?: any[]) => Promise<void>;
-
-  constructor(filename: string) {
-    console.log(`Connecting to database: ${filename}`);
-    this.db = new sqlite3.Database(filename, sqlite3.OPEN_READWRITE | sqlite3.OPEN_CREATE, (err) => {
-      if (err) {
-        console.error('Database connection error:', err);
-      } else {
-        console.log('Database connected successfully');
-      }
-    });
-    this.all = promisify(this.db.all.bind(this.db));
-    this.get = promisify(this.db.get.bind(this.db));
-    this.run = promisify(this.db.run.bind(this.db));
-  }
-
-  close(): void {
-    this.db.close();
-  }
 }
 
 class DevToolsHTTPServer {

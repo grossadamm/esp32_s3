@@ -1,6 +1,8 @@
 services:
   voice-agent:
-    image: dustynv/l4t-pytorch:r36.4.0
+    build:
+      context: .
+      dockerfile: Dockerfile.jetson
     working_dir: /app
     volumes:
       - ./:/app

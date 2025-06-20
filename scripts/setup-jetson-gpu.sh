@@ -4,6 +4,9 @@ set -e
 # =============================================================================
 # Jetson GPU Setup Script (One-time, 25 minutes)
 # 
+# ⚠️  RUN THIS SCRIPT ON YOUR MAC, NOT ON THE JETSON ⚠️
+# This script uses SSH to execute commands remotely on the Jetson
+#
 # Purpose: Initial Jetson setup with ARM dependency builds
 # Run when: First deployment OR when dependencies change (package.json modified)
 # 
@@ -77,7 +80,11 @@ ssh "$JETSON_USER@$JETSON_IP" "cd $JETSON_PROJECT_DIR && npm run build"
 # Phase 4: GPU Container Setup
 log_info "Setting up GPU container environment..."
 
-# Start the container using existing docker-compose.jetson.yml
+# Build the custom image with Node.js (one-time, ~5 minutes)
+log_info "Building custom GPU image with Node.js..."
+ssh "$JETSON_USER@$JETSON_IP" "cd $JETSON_PROJECT_DIR && docker compose -f docker-compose.jetson.yml build voice-agent"
+
+# Start the container
 log_info "Starting GPU voice agent..."
 ssh "$JETSON_USER@$JETSON_IP" "cd $JETSON_PROJECT_DIR && docker compose -f docker-compose.jetson.yml up -d voice-agent"
 

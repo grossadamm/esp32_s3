@@ -1,31 +1,10 @@
 import { createServer, IncomingMessage, ServerResponse } from 'http';
 import sqlite3 from 'sqlite3';
-import { promisify } from 'util';
 import path from 'path';
 import fs from 'fs';
+import { DatabaseWrapper, DatabaseRow } from './utils/DatabaseWrapper.js';
 import { HouseAffordabilityCalculator } from './analysis/house-affordability-calculator.js';
 import { TaxAwareRetirementCalculator } from './analysis/retirement-calculator.js';
-
-interface DatabaseRow {
-    [key: string]: any;
-}
-
-class DatabaseWrapper {
-    private db: sqlite3.Database;
-    public all: (sql: string, params?: any[]) => Promise<DatabaseRow[]>;
-    public get: (sql: string, params?: any[]) => Promise<DatabaseRow | undefined>;
-
-    constructor(filename: string, mode?: number) {
-        const dbMode = mode || (sqlite3.OPEN_READWRITE | sqlite3.OPEN_CREATE);
-        this.db = new sqlite3.Database(filename, dbMode);
-        this.all = promisify(this.db.all.bind(this.db));
-        this.get = promisify(this.db.get.bind(this.db));
-    }
-
-    close(): void {
-        this.db.close();
-    }
-}
 
 class FinanceHTTPServer {
     private db: DatabaseWrapper;

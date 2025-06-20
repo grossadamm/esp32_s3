@@ -224,30 +224,9 @@ class MonarchAPI {
 }
 
 // Database integration
-import sqlite3 from 'sqlite3';
-import { promisify } from 'util';
+import { DatabaseWrapper, DatabaseRow } from './utils/DatabaseWrapper.js';
 
-interface DatabaseRow {
-  [key: string]: any;
-}
 
-class DatabaseWrapper {
-  private db: sqlite3.Database;
-  public all: (sql: string, params?: any[]) => Promise<DatabaseRow[]>;
-  public get: (sql: string, params?: any[]) => Promise<DatabaseRow | undefined>;
-  public run: (sql: string, params?: any[]) => Promise<void>;
-
-  constructor(filename: string) {
-    this.db = new sqlite3.Database(filename);
-    this.all = promisify(this.db.all.bind(this.db));
-    this.get = promisify(this.db.get.bind(this.db));
-    this.run = promisify(this.db.run.bind(this.db));
-  }
-
-  close(): void {
-    this.db.close();
-  }
-}
 
 class FinanceMonarchSync {
   private db: DatabaseWrapper;

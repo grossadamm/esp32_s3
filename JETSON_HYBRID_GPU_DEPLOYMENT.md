@@ -32,8 +32,12 @@ We're implementing a **hybrid deployment strategy** that combines the best of bo
 
 ## 🚀 Two-Script Deployment Strategy
 
+> **🖥️ IMPORTANT: All scripts run on your Mac, not on the Jetson**  
+> The scripts use SSH to execute commands remotely on the Jetson
+
 ### **Script 1: One-Time Setup (25 minutes)**
-**Purpose:** Initial Jetson setup with ARM dependency builds
+**Purpose:** Initial Jetson setup with ARM dependency builds  
+**Run from:** Your Mac (executes on Jetson via SSH)
 ```bash
 ./scripts/setup-jetson-gpu.sh
 ```
@@ -47,7 +51,8 @@ We're implementing a **hybrid deployment strategy** that combines the best of bo
 - Marks setup as complete for fast deployments
 
 ### **Script 2: Fast Development (30 seconds)**  
-**Purpose:** Regular deployment for code changes
+**Purpose:** Regular deployment for code changes  
+**Run from:** Your Mac (executes on Jetson via SSH)
 ```bash
 ./scripts/deploy-jetson-gpu.sh
 ```
@@ -61,6 +66,8 @@ We're implementing a **hybrid deployment strategy** that combines the best of bo
 
 ### **Clear Workflow:**
 ```bash
+# ALL COMMANDS RUN FROM YOUR MAC (not on Jetson)
+
 # Initial setup (once)
 ./scripts/setup-jetson-gpu.sh     # 25 minutes
 
@@ -79,9 +86,9 @@ We're implementing a **hybrid deployment strategy** that combines the best of bo
 
 ### **Daily Development Cycle:**
 1. **Edit code** on Mac (VS Code, full IDE support)
-2. **Deploy changes**: `./scripts/deploy-jetson-gpu.sh` (30 seconds)
+2. **Deploy changes** from Mac: `./scripts/deploy-jetson-gpu.sh` (30 seconds)
 3. **Test immediately**: Voice agent available at http://jetson:3000
-4. **Monitor/debug**: Built-in monitoring scripts on Jetson
+4. **Monitor/debug**: SSH to Jetson for monitoring scripts
 
 ### **When to Re-run Setup:**
 - Added/removed npm packages (package.json changed)
@@ -156,11 +163,11 @@ rsync -av --delete --exclude node_modules ./ jetson:~/voice-agent-gpu/
 
 ### **Initial Deployment:**
 ```bash
-# Clone project and configure environment
+# ON YOUR MAC: Clone project and configure environment
 git clone <repo> && cd mcp-voice-agent
 cp .env.example .env  # Configure API keys
 
-# One-time Jetson setup (25 minutes)
+# ON YOUR MAC: One-time Jetson setup (25 minutes)
 ./scripts/setup-jetson-gpu.sh
 
 # Expected output:
@@ -172,8 +179,8 @@ cp .env.example .env  # Configure API keys
 
 ### **Regular Development:**
 ```bash
-# Make code changes on Mac
-# Deploy to Jetson (30 seconds)
+# ON YOUR MAC: Make code changes
+# ON YOUR MAC: Deploy to Jetson (30 seconds)
 ./scripts/deploy-jetson-gpu.sh
 
 # Expected output:

@@ -1,0 +1,18 @@
+# Minimal Dockerfile for Hybrid GPU Deployment
+# Extends dustynv base with Node.js, uses volume mounting for fast development
+FROM dustynv/l4t-pytorch:r36.4.0
+
+# Install Node.js 20 (LTS)
+RUN curl -fsSL https://deb.nodesource.com/setup_20.x | bash - && \
+    apt-get install -y nodejs && \
+    apt-get clean && \
+    rm -rf /var/lib/apt/lists/*
+
+# Verify installation
+RUN node --version && npm --version
+
+# Set working directory
+WORKDIR /app
+
+# Default command (overridden by docker-compose)
+CMD ["node", "voice-agent/dist/index.js"] 

@@ -277,8 +277,9 @@ The system automatically detects:
 
 ### Docker Setup (Recommended)
 
-The application uses Docker Compose with **3 separate containers** for optimal service isolation:
+The application provides **two Docker configurations** for different environments:
 
+#### Development (macOS/Windows) 🖥️
 ```bash
 # Clone the repository
 git clone <repo-url>
@@ -288,11 +289,17 @@ cd mcp-voice-agent
 cp .env.example .env
 # Edit .env with your API keys (see Environment Variables section below)
 
-# Build and start with Docker Compose
-docker compose up --build
+# Easy development setup (no GPU support)
+./scripts/docker-dev.sh
 
-# Or run in detached mode
-docker compose up -d --build
+# Or manually:
+docker compose -f docker-compose.dev.yml up --build -d
+```
+
+#### Production (Jetson/GPU) 🚀
+```bash
+# Production deployment with GPU support
+docker compose up --build -d
 ```
 
 **Container Services:**

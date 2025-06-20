@@ -32,6 +32,10 @@ app.use(express.json());
 // Routes
 app.use('/api/text', textRouter);
 app.use('/api/audio', audioRouter);
+// Mobile UI on root path
+app.get('/', (req, res) => {
+    res.sendFile(path.join(__dirname, 'mobile-ui.html'));
+});
 // Health check
 app.get('/health', (req, res) => {
     res.json({
@@ -89,6 +93,7 @@ async function initializeServices() {
 }
 server.listen(port, async () => {
     console.log(`🤖 Voice Agent running on http://localhost:${port}`);
+    console.log(`📱 Mobile UI: http://localhost:${port}/ (open on your phone!)`);
     console.log(`Health check: http://localhost:${port}/health`);
     console.log(`Hardware status: GET http://localhost:${port}/api/hardware-status`);
     console.log(`STT status: GET http://localhost:${port}/api/stt-status`);

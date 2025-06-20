@@ -1,6 +1,8 @@
 # Docker Setup for MCP Voice Agent
 
-This project uses PM2 in Docker to manage multiple Node.js services concurrently.
+This project provides two Docker configurations:
+- **Production** (`docker-compose.yml`): Optimized for Jetson devices with GPU support
+- **Development** (`docker-compose.dev.yml`): macOS/Windows compatible without GPU requirements
 
 ## Services
 
@@ -19,35 +21,38 @@ Only the Voice Agent port (3000) is exposed externally for security. Internal se
 
 ## Quick Start
 
-1. **Set up environment variables:**
-   ```bash
-   npm run docker:dev
-   ```
-   This will create a `.env` file if it doesn't exist. Edit it with your API keys:
-   ```
-   ANTHROPIC_API_KEY=your_actual_key_here
-   OPENAI_API_KEY=your_actual_key_here
-   ```
+### Development (macOS/Windows) 🖥️
 
-2. **Build and start all services:**
-   ```bash
-   npm run docker:up
-   ```
+For development on macOS or Windows without GPU support:
 
-3. **View logs:**
-   ```bash
-   npm run docker:logs
-   ```
+```bash
+# Easy one-command setup
+./scripts/docker-dev.sh
 
-4. **Check PM2 process status:**
-   ```bash
-   npm run docker:status
-   ```
+# Or manually:
+docker compose -f docker-compose.dev.yml up --build -d
+```
 
-5. **Stop services:**
-   ```bash
-   npm run docker:down
-   ```
+**Access:**
+- 📱 **Mobile UI**: `http://localhost:3000/`
+- 📊 **Health Check**: `http://localhost:3000/health`
+
+### Production (Jetson/GPU) 🚀
+
+For production deployment on Jetson devices with GPU support:
+
+```bash
+# Standard production deployment
+docker compose up --build -d
+
+# View logs
+docker compose logs -f
+
+# Stop services
+docker compose down
+```
+
+**Note**: Production mode requires NVIDIA Container Toolkit for GPU support.
 
 ## Development
 

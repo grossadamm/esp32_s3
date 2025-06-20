@@ -31,11 +31,11 @@ RUN npm ci
 # Copy source code
 COPY . .
 
-# Install GPU-capable packages (detection happens at runtime)
+# Install GPU-capable packages for Jetson/NVIDIA hardware
 RUN echo "Installing GPU-capable ML packages for Jetson deployment..." && \
     pip3 install --no-cache-dir torch torchvision torchaudio && \
     pip3 install --no-cache-dir openai-whisper transformers && \
-    pip3 install --no-cache-dir onnxruntime || echo "onnxruntime-gpu not available, continuing with CPU version"
+    pip3 install --no-cache-dir onnxruntime-gpu || pip3 install --no-cache-dir onnxruntime
 
 # Build all TypeScript projects to ensure fresh compilation
 RUN echo "Building TypeScript projects..." && \

@@ -3,6 +3,7 @@ import cors from 'cors';
 import dotenv from 'dotenv';
 import fs from 'fs';
 import path from 'path';
+import { fileURLToPath } from 'url';
 import { createServer } from 'http';
 import { textRouter } from './routes/text.js';
 import { audioRouter } from './routes/audio.js';
@@ -39,6 +40,14 @@ app.use(express.json());
 // Routes
 app.use('/api/text', textRouter);
 app.use('/api/audio', audioRouter);
+
+// Mobile UI on root path
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+app.get('/', (req, res) => {
+  res.sendFile(path.join(__dirname, 'mobile-ui.html'));
+});
 
 // Health check
 app.get('/health', (req, res) => {
@@ -102,6 +111,7 @@ async function initializeServices() {
 
 server.listen(port, async () => {
   console.log(`🤖 Voice Agent running on http://localhost:${port}`);
+  console.log(`📱 Mobile UI: http://localhost:${port}/ (open on your phone!)`);
   console.log(`Health check: http://localhost:${port}/health`);
   console.log(`Hardware status: GET http://localhost:${port}/api/hardware-status`);
   console.log(`STT status: GET http://localhost:${port}/api/stt-status`);

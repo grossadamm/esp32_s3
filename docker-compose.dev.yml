@@ -1,31 +1,23 @@
+# Development Docker Compose for macOS compatibility
+# Usage: docker compose -f docker-compose.dev.yml up
+
 services:
   mcp-voice-agent:
     build: .
-    network_mode: host  # Workaround for Jetson iptables issues
+    ports:
+      - "3000:3000"  # Standard port mapping for macOS compatibility
     environment:
-      - NODE_ENV=production
+      - NODE_ENV=development
       - LLM_PROVIDER=openai
       - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
       - OPENAI_API_KEY=${OPENAI_API_KEY}
-      - NVIDIA_VISIBLE_DEVICES=all
-      - CUDA_VISIBLE_DEVICES=all
-      - LD_LIBRARY_PATH=/usr/local/nvidia/lib:/usr/local/nvidia/lib64
-      - NVIDIA_DRIVER_CAPABILITIES=compute,utility
-      - STT_PREFER_LOCAL=true
+      - STT_PREFER_LOCAL=false  # Use cloud STT for development
+      - DEBUG=*
     volumes:
       - ./data:/data
       - ./logs:/app/logs
       - ./uploads:/app/voice-agent/uploads
     restart: unless-stopped
-    # GPU support for NVIDIA hardware (Jetson compatible)
-    deploy:
-      resources:
-        reservations:
-          devices:
-            - driver: nvidia
-              count: all
-              capabilities: [gpu, compute, utility]
-    runtime: nvidia  # Legacy fallback for older Docker versions
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:3000/health"]
       interval: 30s
@@ -35,7 +27,7 @@ services:
   dev-tools-api:
     build: .
     environment:
-      - NODE_ENV=production
+      - NODE_ENV=development
     volumes:
       - ./data:/data
       - ./logs:/app/logs
@@ -47,7 +39,7 @@ services:
   finance-api:
     build: .
     environment:
-      - NODE_ENV=production
+      - NODE_ENV=development
       - PORT=3000
     volumes:
       - ./data:/data

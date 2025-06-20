@@ -53,7 +53,7 @@ check_docker_nvidia() {
     
     # Check for NVIDIA Container Toolkit
     if check_nvidia_gpu; then
-        if docker run --rm --gpus all nvidia/cuda:11.0-base nvidia-smi >/dev/null 2>&1; then
+        if docker run --rm --runtime=nvidia nvidia/cuda:11.0-base nvidia-smi >/dev/null 2>&1; then
             echo "✅ NVIDIA Container Toolkit is working"
             GPU_SUPPORT=true
         else

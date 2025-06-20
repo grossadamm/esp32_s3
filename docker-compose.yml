@@ -1,8 +1,7 @@
 services:
   mcp-voice-agent:
     build: .
-    ports:
-      - "3000:3000"  # Voice Agent (main entry point)
+    network_mode: host  # Workaround for Jetson iptables issues
     environment:
       - NODE_ENV=production
       - LLM_PROVIDER=openai
@@ -15,20 +14,16 @@ services:
       - ./logs:/app/logs
       - ./uploads:/app/voice-agent/uploads
     restart: unless-stopped
-    # GPU support for NVIDIA hardware
-    deploy:
-      resources:
-        reservations:
-          devices:
-            - driver: nvidia
-              count: all
-              capabilities: [gpu]
-    # Alternative GPU access (comment out deploy section above if using this)
-    # runtime: nvidia
-    # devices:
-    #   - /dev/nvidia0:/dev/nvidia0
-    #   - /dev/nvidiactl:/dev/nvidiactl
-    #   - /dev/nvidia-uvm:/dev/nvidia-uvm
+    # GPU support for NVIDIA hardware (Jetson compatible)
+    runtime: nvidia
+    # Alternative GPU access for newer setups (comment out runtime above if using this)
+    # deploy:
+    #   resources:
+    #     reservations:
+    #       devices:
+    #         - driver: nvidia
+    #           count: all
+    #           capabilities: [gpu]
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:3000/health"]
       interval: 30s

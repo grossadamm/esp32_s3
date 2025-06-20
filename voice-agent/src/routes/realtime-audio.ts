@@ -1,6 +1,6 @@
 import { WebSocketServer, WebSocket } from 'ws';
 import { OpenAI } from 'openai';
-import { MCPClientSingleton } from '../services/MCPClientSingleton.js';
+import { MCPService } from '../services/MCPService.js';
 import { MCPRealtimeBridge } from '../services/MCPRealtimeBridge.js';
 import { logError, logInfo, logWarning } from '../utils/logger.js';
 
@@ -8,8 +8,10 @@ export class RealtimeAudioService {
   private wss!: WebSocketServer;
   private openai: OpenAI;
   private mcpBridge!: MCPRealtimeBridge;
+  private mcpService: MCPService;
 
-  constructor() {
+  constructor(mcpService: MCPService) {
+    this.mcpService = mcpService;
     this.openai = new OpenAI({
       apiKey: process.env.OPENAI_API_KEY
     });
@@ -22,7 +24,7 @@ export class RealtimeAudioService {
     });
 
     // Initialize MCP bridge
-    const mcpClient = await MCPClientSingleton.getInstance();
+    const mcpClient = this.mcpService.getClient();
     this.mcpBridge = new MCPRealtimeBridge(mcpClient);
 
     this.wss.on('connection', async (ws: WebSocket) => {

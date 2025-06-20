@@ -1,10 +1,11 @@
 import { Router, Request, Response } from 'express';
 import { LLMFactory } from '../services/LLMFactory.js';
-import { MCPClientSingleton } from '../services/MCPClientSingleton.js';
+import { MCPService } from '../services/MCPService.js';
 import { createValidationError, createSystemError } from '../utils/errorUtils.js';
 import { logError, logInfo } from '../utils/logger.js';
 
-const router = Router();
+export function createTextRouter(mcpService: MCPService) {
+  const router = Router();
 
 interface TextRequest {
   text: string;
@@ -27,8 +28,8 @@ router.post('/', async (req: Request, res: Response) => {
     logInfo('Text Processing', `Processing query: ${text.substring(0, 100)}${text.length > 100 ? '...' : ''}`);
 
     // Get LLM provider and tools
-    const llmProvider = LLMFactory.create();
-    const mcpClient = await MCPClientSingleton.getInstance();
+    const mcpClient = mcpService.getClient();
+    const llmProvider = LLMFactory.create(mcpClient);
     const tools = await mcpClient.getAvailableTools();
     
     logInfo('Text Processing', `Using LLM: ${llmProvider.getModelName()}`);
@@ -47,4 +48,5 @@ router.post('/', async (req: Request, res: Response) => {
   }
 });
 
-export { router as textRouter }; 
+  return router;
+} 

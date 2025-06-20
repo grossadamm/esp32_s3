@@ -1,6 +1,6 @@
 import Anthropic from '@anthropic-ai/sdk';
 import { LLMProvider, LLMResponse } from './LLMInterface.js';
-import { MCPClientSingleton } from './MCPClientSingleton.js';
+import { MCPClient } from './MCPClient.js';
 
 interface Tool {
   name: string;
@@ -14,8 +14,10 @@ interface Tool {
 
 export class ClaudeService implements LLMProvider {
   private anthropic: Anthropic;
+  private mcpClient: MCPClient;
 
-  constructor() {
+  constructor(mcpClient: MCPClient) {
+    this.mcpClient = mcpClient;
     this.anthropic = new Anthropic({
       apiKey: process.env.ANTHROPIC_API_KEY!,
     });
@@ -73,8 +75,7 @@ You have access to tools that can query a comprehensive finance system. Answer t
         for (const toolUse of toolUseBlocks) {
           if (toolUse.type === 'tool_use') {
             try {
-              const mcpClient = await MCPClientSingleton.getInstance();
-              const result = await mcpClient.executeTool(toolUse.name, toolUse.input);
+              const result = await this.mcpClient.executeTool(toolUse.name, toolUse.input);
               toolResults.push({
                 type: "tool_result" as const,
                 tool_use_id: toolUse.id,

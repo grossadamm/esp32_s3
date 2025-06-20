@@ -5,15 +5,15 @@ import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { createServer } from 'http';
-import { textRouter } from './routes/text.js';
-import { audioRouter } from './routes/audio.js';
+import { createTextRouter } from './routes/text.js';
+import { createAudioRouter } from './routes/audio.js';
 import { RealtimeAudioService } from './routes/realtime-audio.js';
 import { FileCleanupService } from './services/FileCleanupService.js';
 import { HardwareDetectionService } from './services/HardwareDetectionService.js';
 import { AdaptiveSTTService } from './services/AdaptiveSTTService.js';
 import { createSystemError } from './utils/errorUtils.js';
 import { logError, logInfo, logWarning } from './utils/logger.js';
-import { MCPClientSingleton } from './services/MCPClientSingleton.js';
+import { MCPService } from './services/MCPService.js';
 
 dotenv.config();
 
@@ -21,8 +21,11 @@ const app = express();
 const server = createServer(app);
 const port = process.env.PORT || 3000;
 
+// Initialize MCP Service
+const mcpService = new MCPService();
+
 // Initialize Realtime Audio Service
-const realtimeAudioService = new RealtimeAudioService();
+const realtimeAudioService = new RealtimeAudioService(mcpService);
 
 // Clean uploads directory at startup
 FileCleanupService.cleanupUploadsDirectory();
@@ -38,9 +41,7 @@ if (!fs.existsSync(uploadsDir)) {
 app.use(cors());
 app.use(express.json());
 
-// Routes
-app.use('/api/text', textRouter);
-app.use('/api/audio', audioRouter);
+// Routes will be set up after MCP service initialization
 
 // Mobile UI on root path
 const __filename = fileURLToPath(import.meta.url);
@@ -96,8 +97,12 @@ async function initializeServices() {
   try {
     logInfo('Service Initialization', 'Initializing services...');
     
-    // Initialize MCP client singleton first (needed by LLM services)
-    await MCPClientSingleton.getInstance();
+    // Initialize MCP service first (needed by LLM services and routes)
+    await mcpService.initialize();
+    
+    // Set up routes after MCP service is ready
+    app.use('/api/text', createTextRouter(mcpService));
+    app.use('/api/audio', createAudioRouter(mcpService));
     
     // Detect hardware capabilities
     const hardwareInfo = await HardwareDetectionService.detectHardware();
@@ -118,7 +123,7 @@ process.on('SIGINT', async () => {
   console.log('\n🛑 Shutting down Voice Agent...');
   try {
     await realtimeAudioService.close();
-    await MCPClientSingleton.close();
+    await mcpService.close();
     console.log('✅ Graceful shutdown complete');
     process.exit(0);
   } catch (error) {
@@ -131,7 +136,7 @@ process.on('SIGTERM', async () => {
   console.log('\n🛑 Shutting down Voice Agent...');
   try {
     await realtimeAudioService.close();
-    await MCPClientSingleton.close();
+    await mcpService.close();
     console.log('✅ Graceful shutdown complete');
     process.exit(0);
   } catch (error) {

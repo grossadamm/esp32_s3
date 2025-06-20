@@ -4,12 +4,13 @@ import fs from 'fs';
 import { OpenAI } from 'openai';
 import { AdaptiveSTTService } from '../services/AdaptiveSTTService.js';
 import { LLMFactory } from '../services/LLMFactory.js';
-import { MCPClientSingleton } from '../services/MCPClientSingleton.js';
+import { MCPService } from '../services/MCPService.js';
 import { createValidationError, createExternalAPIError, createSystemError } from '../utils/errorUtils.js';
 import { logError, logInfo, logWarning } from '../utils/logger.js';
 
-const router = Router();
-const adaptiveSTT = new AdaptiveSTTService();
+export function createAudioRouter(mcpService: MCPService) {
+  const router = Router();
+  const adaptiveSTT = new AdaptiveSTTService();
 
 // Configure multer for audio file uploads
 const upload = multer({
@@ -94,8 +95,8 @@ router.post('/', upload.single('audio'), async (req: Request, res: Response) => 
     // Process the transcribed text through the LLM pipeline
     let llmProvider, tools, result;
     try {
-      llmProvider = LLMFactory.create();
-      const mcpClient = await MCPClientSingleton.getInstance();
+      const mcpClient = mcpService.getClient();
+      llmProvider = LLMFactory.create(mcpClient);
       tools = await mcpClient.getAvailableTools();
       result = await llmProvider.processText(transcription, tools, true); // true for verbal response
     } catch (llmError) {
@@ -169,4 +170,5 @@ router.post('/', upload.single('audio'), async (req: Request, res: Response) => 
   }
 });
 
-export { router as audioRouter }; 
+  return router;
+} 

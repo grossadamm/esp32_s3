@@ -4,20 +4,26 @@ This project provides two Docker configurations:
 - **Production** (`docker-compose.yml`): Optimized for Jetson devices with GPU support
 - **Development** (`docker-compose.dev.yml`): macOS/Windows compatible without GPU requirements
 
-## Services
+## Architecture
 
-The Docker setup runs 3 services:
+The Docker setup runs a **single container** with PM2 managing the voice agent process:
 
 1. **Voice Agent** (Port 3000) - Main voice interface with WebSocket support **[EXPOSED]**
-2. **Finance API** (Port 3000) - Financial analysis HTTP server **[INTERNAL]**
-3. **Dev Tools API** (Port 3000) - Development tools HTTP server **[INTERNAL]**
+   - HTTP endpoints: `/api/text`, `/api/audio` 
+   - WebSocket endpoint: `/api/audio/realtime` for real-time audio streaming
+   - MCP client integration via STDIO communication
+   - Health checks and status endpoints
 
-Only the Voice Agent is accessible externally. All services use host networking mode, with internal services only accessible within the container network for security.
+2. **MCP Servers** - On-demand processes spawned via STDIO
+   - **Finance MCP**: Financial analysis tools (spawned by voice agent)
+   - **Dev Tools MCP**: Project management tools (spawned by voice agent)
+   - **No HTTP servers**: Direct STDIO communication for security and efficiency
 
-**Voice Agent Features:**
-- HTTP endpoints: `/api/text`, `/api/audio` 
-- WebSocket endpoint: `/api/audio/realtime` for real-time audio streaming
-- Health checks and status endpoints
+**Benefits:**
+- **Simplified Deployment**: Single container to manage
+- **Reduced Attack Surface**: No internal HTTP servers
+- **Lower Resource Usage**: Fewer persistent processes
+- **STDIO Security**: MCP communication via secure channels
 
 ## Quick Start
 
@@ -34,7 +40,7 @@ docker compose -f docker-compose.dev.yml up --build -d
 ```
 
 **Access:**
-- 📱 **Mobile UI**: `http://localhost:3000/`
+- 📱 **Voice Agent**: `http://localhost:3000/`
 - 📊 **Health Check**: `http://localhost:3000/health`
 
 ### Production (Jetson/GPU) 🚀
@@ -63,19 +69,24 @@ npm run docker:dev
 
 ## PM2 Management
 
-Inside the container, PM2 manages all processes:
+Inside the container, PM2 manages the voice agent process:
 
 - View status: `docker compose exec mcp-voice-agent pm2 status`
 - View logs: `docker compose exec mcp-voice-agent pm2 logs`
-- Restart service: `docker compose exec mcp-voice-agent pm2 restart <service-name>`
-- Monitor: `docker compose exec mcp-voice-agent pm2 monit`
+- Restart voice agent: `docker compose exec mcp-voice-agent pm2 restart voice-agent`
+- Monitor processes: `docker compose exec mcp-voice-agent pm2 monit`
+
+**MCP Server Management:**
+- MCP servers are spawned automatically by the voice agent as needed
+- No manual process management required for MCP servers
+- Communication happens via secure STDIO channels
 
 ## Logs
 
-All service logs are stored in the `./logs` directory and mounted as volumes:
-- `voice-agent.log`
-- `finance-mcp.log`
-- `finance-http.log`
+Service logs are stored in the `./logs` directory and mounted as volumes:
+- `voice-agent.log` - Main voice agent logs
+- `voice-agent-error.log` - Voice agent error logs
+- `voice-agent-out.log` - Voice agent output logs
 
 ## Testing
 
@@ -88,12 +99,12 @@ npm run docker:up
 
 # Open the interactive test client in browser
 open voice-agent/test-realtime-client.html
-# Or navigate to: http://localhost:3000/static/test-realtime-client.html (if served)
 
 # Test WebSocket connection
 # 1. Click "Connect" in the browser interface
 # 2. Click "Start Recording" and speak
 # 3. See live transcription and audio responses
+# 4. Test MCP integration: "What's my project status?" or "Show my expenses"
 ```
 
 ### Traditional API Testing
@@ -110,11 +121,20 @@ curl -X POST http://localhost:3000/api/audio \
 
 # Health check
 curl http://localhost:3000/health
+
+# Hardware status
+curl http://localhost:3000/api/hardware-status
+
+# STT service status
+curl http://localhost:3000/api/stt-status
 ```
 
 ## Health Checks
 
-The main service includes health checks on port 3000. Make sure your voice agent implements a `/health` endpoint.
+The main service includes health checks on port 3000. The voice agent implements comprehensive health monitoring:
+- `/health` - Overall service health
+- `/api/hardware-status` - GPU and hardware capabilities  
+- `/api/stt-status` - Speech-to-text service status
 
 ## Volumes
 
@@ -124,19 +144,39 @@ The main service includes health checks on port 3000. Make sure your voice agent
 
 ## Troubleshooting
 
-1. **Port conflicts:** Only the voice agent port 3000 is exposed externally - change in `docker-compose.yml` if needed
+1. **Port conflicts:** Only port 3000 is exposed - change in `docker-compose.yml` if needed
 2. **Build issues:** Run `npm run docker:build` to rebuild
 3. **Process issues:** Use `npm run docker:status` to check PM2 processes
 4. **Clean restart:** `npm run docker:down && npm run docker:up`
-5. **Internal service access:** Finance and dev-tools APIs are only accessible within the container network
+5. **MCP communication issues:** Check voice agent logs for STDIO connection errors
 
-## Internal Service Access
+## Container Access
 
-To access internal services for debugging:
+To access the container for debugging:
 ```bash
-# Execute commands inside specific containers
-docker compose exec finance-api curl http://localhost:3000/api/schema
-docker compose exec finance-api curl http://localhost:3000/health
-docker compose exec dev-tools-api curl http://localhost:3000/api/projects
-docker compose exec dev-tools-api curl http://localhost:3000/health
-``` 
+# Execute commands inside the container
+docker compose exec mcp-voice-agent /bin/bash
+
+# Check PM2 status
+docker compose exec mcp-voice-agent pm2 status
+
+# View application structure
+docker compose exec mcp-voice-agent ls -la /app
+
+# Run MCP tools directly for testing
+docker compose exec mcp-voice-agent node mcp-servers/finance-mcp/dist/index.js
+```
+
+## Development vs Production Differences
+
+### Development (`docker-compose.dev.yml`)
+- No GPU support
+- Volume mounts for hot reload
+- Debug logging enabled
+- Optimized for macOS/Windows
+
+### Production (`docker-compose.yml`)
+- Full GPU support with NVIDIA runtime
+- Optimized for Jetson devices
+- Production logging
+- Security hardened 

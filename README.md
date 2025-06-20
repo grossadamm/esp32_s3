@@ -42,7 +42,7 @@ mcp-voice-agent/
 ├── data/
 │   ├── finance.db                  # SQLite database with financial data  
 │   └── projects.db                 # SQLite database with project data
-├── docker-compose.yml              # Docker Compose configuration (3 containers)
+├── docker-compose.yml              # Docker Compose configuration (single container)
 ├── Dockerfile                      # Docker container definition
 ├── ecosystem.config.js             # PM2 process management (voice agent only)
 ├── mcp-config.json                 # MCP server registry
@@ -51,34 +51,42 @@ mcp-voice-agent/
 
 ## Container Architecture
 
-The application uses Docker Compose with **3 separate containers** for clean service isolation:
+The application uses a **single Docker container** with PM2 process management for simplicity and efficiency:
 
 ```
-┌─────────────────────┐    ┌─────────────────────┐    ┌─────────────────────┐
-│   Voice Agent       │    │   Finance API       │    │   Dev Tools API     │
-│   Container         │    │   Container         │    │   Container         │
-│                     │    │                     │    │                     │
-│ ┌─────────────────┐ │    │ ┌─────────────────┐ │    │ ┌─────────────────┐ │
-│ │ Voice Agent     │ │    │ │ Finance HTTP    │ │    │ │ Dev Tools HTTP  │ │
-│ │ (Port 3000)     │ │    │ │ (Port 3000)     │ │    │ │ (Port 3000)     │ │
-│ │                 │ │    │ │ - SQL Queries   │ │    │ │ - Projects CRUD │ │
-│ │ - Text API      │ │    │ │ - Account Info  │ │    │ │ - Project State │ │
-│ │ - Audio API     │ │    │ │ - Transactions  │ │    │ │ - SQLite DB     │ │
-│ │ - MCP Client    │ │    │ │ - Analysis      │ │    │ │                 │ │
-│ │ - GPU-Aware STT │ │    │ │ - Read-Only DB  │ │    │ │                 │ │
-│ │ - Verbal LLM    │ │    │ │                 │ │    │ │                 │ │
-│ └─────────────────┘ │    │ └─────────────────┘ │    │ └─────────────────┘ │
-└─────────┬───────────┘    └─────────────────────┘    └─────────────────────┘
-          │                                                                   
-       External                          Internal Only         Internal Only  
-    localhost:3000                    (No external ports)    (No external ports)
+┌─────────────────────────────────────────────────────────┐
+│                 Voice Agent Container                   │
+│                                                         │
+│ ┌─────────────────┐    ┌─────────────────────────────┐ │
+│ │   PM2 Manager   │    │        Voice Agent          │ │
+│ │                 │    │        (Port 3000)          │ │
+│ │ - Process Mon.  │──► │                             │ │
+│ │ - Auto Restart  │    │ - Text/Audio APIs           │ │
+│ │ - Log Mgmt      │    │ - MCP Client (STDIO)        │ │
+│ │                 │    │ - GPU-Aware STT             │ │
+│ └─────────────────┘    │ - LLM Integration           │ │
+│                        │ - Real-time WebSocket       │ │
+│ ┌─────────────────────────────────────────────────────┐ │
+│ │          MCP Servers (STDIO Communication)          │ │
+│ │                                                     │ │
+│ │ ┌─────────────────┐  ┌─────────────────────────────┐ │
+│ │ │ Finance MCP     │  │ Dev Tools MCP               │ │
+│ │ │ - SQL Queries   │  │ - Project Management        │ │
+│ │ │ - Analysis      │  │ - SQLite Operations         │ │
+│ │ │ - Monarch Sync  │  │ - Project State             │ │
+│ │ └─────────────────┘  └─────────────────────────────┘ │
+│ └─────────────────────────────────────────────────────┘ │
+└─────────────────┬───────────────────────────────────────┘
+                  │
+               External
+            localhost:3000
 ```
 
 **Key Benefits:**
-- **Security**: Only voice agent exposed externally
-- **Isolation**: Each service runs in its own container
-- **Scalability**: Services can be scaled independently
-- **Maintenance**: Clean separation of concerns
+- **Simplicity**: Single container, simpler deployment
+- **Efficiency**: Direct STDIO communication, no HTTP overhead
+- **Consistency**: Matches Jetson deployment architecture
+- **Resource Optimization**: Lower memory footprint, fewer processes
 
 ## Features
 
@@ -325,12 +333,10 @@ docker compose -f docker-compose.dev.yml up --build -d
 docker compose up --build -d
 ```
 
-**Container Services:**
-- **mcp-voice-agent**: Main voice agent (port 3000, externally exposed)
-- **finance-api**: Finance HTTP server (port 3000, internal only)
-- **dev-tools-api**: Dev tools HTTP server (port 3000, internal only)
+**Container Service:**
+- **mcp-voice-agent**: Single container with voice agent (port 3000) and MCP servers (STDIO communication)
 
-**Security**: Only the main voice agent (port 3000) is exposed externally. All other services run internally for security.
+**Architecture**: All services run within a single container using PM2 process management and STDIO-based MCP communication.
 
 ### Local Development Setup
 
@@ -375,13 +381,11 @@ docker compose up --build
 # Start in background
 docker compose up -d --build
 
-# View logs from all containers
+# View logs from container
 docker compose logs -f
 
-# View logs from specific container
+# View specific service logs within container
 docker compose logs -f mcp-voice-agent
-docker compose logs -f finance-api
-docker compose logs -f dev-tools-api
 
 # Access container shell
 docker compose exec mcp-voice-agent /bin/bash
@@ -742,10 +746,10 @@ curl -X POST \
 
 ## Process Management
 
-The Docker setup uses a **simplified PM2 configuration** that only manages the voice agent:
+The Docker setup uses **PM2 for process management** within the single container:
 
 **PM2 Configuration** (`ecosystem.config.js`):
-- **voice-agent**: Main API server (port 3000)
+- **voice-agent**: Main API server (port 3000) with MCP client integration
 
 **PM2 Commands in Container:**
 ```bash
@@ -762,13 +766,18 @@ docker compose exec mcp-voice-agent pm2 restart voice-agent
 docker compose exec mcp-voice-agent pm2 monit
 ```
 
+**MCP Server Communication:**
+- MCP servers are spawned on-demand via STDIO by the voice agent
+- No persistent HTTP servers needed for MCP communication
+- Automatic process management through MCP client lifecycle
+
 ## Security Features
 
 ### Container Security
-- **Port Isolation**: Only main voice agent (port 3000) exposed externally
-- **Service Isolation**: Each service runs in separate containers
-- **Internal Communication**: Finance and dev-tools APIs accessible only within Docker network
-- **Process Isolation**: Clean separation of concerns across containers
+- **Port Isolation**: Only voice agent (port 3000) exposed externally
+- **STDIO Communication**: MCP servers communicate via secure STDIO channels, not network
+- **Process Isolation**: PM2 manages isolated processes within the container
+- **No Internal HTTP**: No internal HTTP servers reduce attack surface
 
 ### Read-Only Database Access
 The finance HTTP server uses `SQLITE_OPEN_READONLY` mode to prevent any write operations:
@@ -793,7 +802,7 @@ Import live financial data from Monarch Money:
 
 ```bash
 # Docker environment
-docker compose exec finance-api sh -c "cd /app && MONARCH_TOKEN=your_token npx tsx mcp-servers/finance-mcp/src/MonarchSync.ts"
+docker compose exec mcp-voice-agent sh -c "cd /app && MONARCH_TOKEN=your_token npx tsx mcp-servers/finance-mcp/src/MonarchSync.ts"
 
 # Local environment  
 cd mcp-servers/finance-mcp
@@ -940,13 +949,13 @@ After Monarch import:
 
 ### Container Architecture Benefits
 
-The 3-container architecture provides several advantages:
+The single-container architecture provides several advantages:
 
-1. **Security**: Only the voice agent is exposed externally
-2. **Isolation**: Services can't interfere with each other
-3. **Scalability**: Each service can be scaled independently
-4. **Debugging**: Easier to debug individual services
-5. **Maintenance**: Clean separation makes updates safer
+1. **Simplicity**: Unified deployment with single container management
+2. **Efficiency**: Direct STDIO communication eliminates HTTP overhead
+3. **Resource Optimization**: Lower memory footprint and fewer processes
+4. **Consistency**: Matches Jetson deployment architecture for universal compatibility
+5. **Security**: Reduced attack surface with no internal HTTP servers
 
 ### Adding New MCP Tools
 
@@ -987,7 +996,7 @@ The HTTP servers implement multiple security layers:
 3. **MCP connection issues**: Verify MCP servers are running and accessible
 4. **API key errors**: Check environment variables are set correctly
 5. **Monarch sync fails**: Verify MONARCH_TOKEN is valid and has proper permissions
-6. **Container connection issues**: Ensure Docker Compose network is working
+6. **Container startup issues**: Check Docker logs and PM2 process status
 7. **GPU detection fails**: Check NVIDIA drivers and Container Toolkit installation
 8. **STT errors**: Check `/api/stt-status` and `/api/hardware-status` for diagnostics
 
@@ -1000,13 +1009,11 @@ DEBUG=* npm run dev
 
 View container logs:
 ```bash
-# All containers
+# Container logs
 docker compose logs -f
 
-# Specific container
+# Specific service logs
 docker compose logs -f mcp-voice-agent
-docker compose logs -f finance-api
-docker compose logs -f dev-tools-api
 ```
 
 Check service status:

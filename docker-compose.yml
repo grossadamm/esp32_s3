@@ -1,7 +1,8 @@
 services:
   mcp-voice-agent:
     build: .
-    network_mode: host  # Workaround for Jetson iptables issues
+    ports:
+      - "3000:3000"
     environment:
       - NODE_ENV=production
       - LLM_PROVIDER=openai
@@ -10,12 +11,12 @@ services:
       - NVIDIA_VISIBLE_DEVICES=all
       - CUDA_VISIBLE_DEVICES=all
       - LD_LIBRARY_PATH=/usr/local/nvidia/lib:/usr/local/nvidia/lib64
-      - NVIDIA_DRIVER_CAPABILITIES=compute,utility
+      - NVIDIA_DRIVER_CAPABILITIES=compute,utility,graphics
       - STT_PREFER_LOCAL=true
     volumes:
-      - ./data:/data
+      - ./data:/app/data
       - ./logs:/app/logs
-      - ./uploads:/app/voice-agent/uploads
+      - ./uploads:/app/uploads
     restart: unless-stopped
     # GPU support for NVIDIA hardware (Jetson compatible)
     deploy:
@@ -31,31 +32,6 @@ services:
       interval: 30s
       timeout: 10s
       retries: 3
-
-  dev-tools-api:
-    build: .
-    environment:
-      - NODE_ENV=production
-    volumes:
-      - ./data:/data
-      - ./logs:/app/logs
-    command: ["node", "mcp-servers/dev-tools-mcp/dist/http-server.js"]
-    restart: unless-stopped
-    depends_on:
-      - mcp-voice-agent
-
-  finance-api:
-    build: .
-    environment:
-      - NODE_ENV=production
-      - PORT=3000
-    volumes:
-      - ./data:/data
-      - ./logs:/app/logs
-    command: ["node", "mcp-servers/finance-mcp/dist/http-server.js"]
-    restart: unless-stopped
-    depends_on:
-      - mcp-voice-agent
 
 volumes:
   logs:

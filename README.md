@@ -409,11 +409,8 @@ npm run dev:finance-mcp
 # Start dev tools MCP server (MCP protocol)  
 npm run dev:dev-tools-mcp
 
-# Start finance HTTP server (direct API access)
-cd mcp-servers/finance-mcp && npm run start:http
-
-# Start dev tools HTTP server (direct API access)
-cd mcp-servers/dev-tools-mcp && npm run start:http
+# MCP servers are spawned automatically by voice agent via STDIO
+# No manual server startup needed for MCP communication
 
 # Sync financial data from Monarch Money
 cd mcp-servers/finance-mcp && MONARCH_TOKEN=your_token npx tsx src/MonarchSync.ts
@@ -559,70 +556,14 @@ Get speech-to-text service status and configuration.
 }
 ```
 
-### Finance HTTP Server (Internal Only)
+### MCP Tools Integration
 
-Direct REST API access to financial data with read-only security.
+The voice agent communicates with MCP servers via STDIO protocol for secure, efficient tool execution. All financial and development tools are available through natural language queries to the voice agent.
 
-#### POST /api/query
-Execute read-only SQL queries on financial database.
-
-#### GET /api/accounts
-Get account balances and information.
-
-#### GET /api/spending?months=1
-Get spending by category for specified months.
-
-#### GET /api/transactions?days=7&limit=20
-Get recent transactions.
-
-#### GET /api/large-expenses?threshold=100&days=30
-Get large expenses above threshold.
-
-#### GET /api/cash-flow?days=30
-Get income vs expenses analysis.
-
-#### GET /api/options
-Get stock options portfolio information.
-
-#### GET /api/retirement
-Get tax-aware retirement analysis.
-
-#### GET /api/house-affordability
-Get comprehensive house affordability analysis.
-
-#### GET /api/schema
-Get database schema information.
-
-#### GET /health
-Health check endpoint.
-
-### Dev Tools HTTP Server (Internal Only)
-
-Direct REST API access for project management.
-
-#### GET /api/projects
-List all projects.
-
-#### POST /api/projects
-Create a new project.
-```json
-{"name": "project-name"}
-```
-
-#### GET /api/projects/current
-Get currently active project.
-
-#### POST /api/projects/current
-Enter/activate a project.
-```json
-{"identifier": "name-or-id"}
-```
-
-#### DELETE /api/projects/current
-Leave current project.
-
-#### DELETE /api/projects/{id}
-Delete project by ID.
+**Available via Voice/Text API:**
+- **Finance Tools**: Database queries, house affordability analysis, Monarch sync, Amazon imports
+- **Project Tools**: Project management, creation, navigation, and deletion
+- **Real-time Execution**: All tools available during real-time voice conversations
 
 ## Testing
 
@@ -780,10 +721,10 @@ docker compose exec mcp-voice-agent pm2 monit
 - **No Internal HTTP**: No internal HTTP servers reduce attack surface
 
 ### Read-Only Database Access
-The finance HTTP server uses `SQLITE_OPEN_READONLY` mode to prevent any write operations:
-- SQL queries are restricted to SELECT statements only
+The finance MCP server implements read-only database security for external queries:
+- SQL queries via MCP tools are restricted to SELECT statements only
 - Write operations (INSERT, UPDATE, DELETE, etc.) are blocked
-- Database integrity is protected from API access
+- Database integrity is protected from external access
 
 ### Query Validation
 - Only SELECT statements are allowed through the query endpoint

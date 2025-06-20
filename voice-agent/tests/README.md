@@ -9,8 +9,8 @@ Integration test suite for the voice finance assistant.
 
 ### Prerequisites
 
-1. **STT Agent server** running on `http://localhost:3001`
-2. **Finance MCP server** running on `http://localhost:3000`
+1. **Voice Agent server** running on `http://localhost:3000`
+2. **MCP servers** available via STDIO (automatically managed by voice agent)
 3. **macOS** with `say` command (for audio generation)
 4. **ffmpeg** installed (for audio optimization)
 

@@ -3,17 +3,16 @@ import cors from 'cors';
 import dotenv from 'dotenv';
 import fs from 'fs';
 import path from 'path';
-import { fileURLToPath } from 'url';
 import { createServer } from 'http';
-import { createTextRouter } from './routes/text.js';
-import { createAudioRouter } from './routes/audio.js';
-import { RealtimeAudioService } from './routes/realtime-audio.js';
-import { FileCleanupService } from './services/FileCleanupService.js';
-import { HardwareDetectionService } from './services/HardwareDetectionService.js';
-import { AdaptiveSTTService } from './services/AdaptiveSTTService.js';
-import { createSystemError } from './utils/errorUtils.js';
-import { logError, logInfo, logWarning } from './utils/logger.js';
-import { MCPService } from './services/MCPService.js';
+import { createTextRouter } from './routes/text';
+import { createAudioRouter } from './routes/audio';
+import { RealtimeAudioService } from './routes/realtime-audio';
+import { FileCleanupService } from './services/FileCleanupService';
+import { HardwareDetectionService } from './services/HardwareDetectionService';
+import { AdaptiveSTTService } from './services/AdaptiveSTTService';
+import { createSystemError } from './utils/errorUtils';
+import { logError, logInfo, logWarning } from './utils/logger';
+import { MCPService } from './services/MCPService';
 
 dotenv.config();
 
@@ -44,9 +43,6 @@ app.use(express.json());
 // Routes will be set up after MCP service initialization
 
 // Mobile UI on root path
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-
 app.get('/', (req, res) => {
   res.sendFile(path.join(__dirname, 'mobile-ui.html'));
 });
@@ -155,9 +151,9 @@ server.listen(port, async () => {
   console.log(`Audio endpoint: POST http://localhost:${port}/api/audio (returns audio)`);
   console.log(`🎙️ Realtime Audio: WebSocket ws://localhost:${port}/api/audio/realtime`);
   
-  // Initialize realtime audio service
-  await realtimeAudioService.initialize(server);
-  
-  // Initialize services after server starts
+  // Initialize services first (including MCP service)
   await initializeServices();
+  
+  // Initialize realtime audio service after MCP service is ready
+  await realtimeAudioService.initialize(server);
 }); 

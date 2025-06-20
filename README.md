@@ -44,7 +44,7 @@ mcp-voice-agent/
 │   └── projects.db                 # SQLite database with project data
 ├── docker-compose.yml              # Docker Compose configuration (single container)
 ├── Dockerfile                      # Docker container definition
-├── ecosystem.config.js             # PM2 process management (voice agent only)
+├── ecosystem.config.js             # PM2 process management configuration
 ├── mcp-config.json                 # MCP server registry
 └── package.json                    # Root monorepo configuration
 ```
@@ -301,7 +301,7 @@ docker compose up --build -d
 
 ### Prerequisites
 - Docker and Docker Compose (recommended)
-- OR Node.js 18+ and npm 9+ (for local development)
+- OR Node.js 20+ and npm 9+ (for local development)
 - OpenAI API key
 - Anthropic API key (optional)
 - Monarch Money token (optional, for data sync)
@@ -333,7 +333,7 @@ For development on macOS or Windows without GPU support:
 
 ```bash
 # Clone the repository
-git clone <repo-url>
+git clone https://github.com/yourusername/mcp-voice-agent.git
 cd mcp-voice-agent
 
 # Set up environment variables
@@ -429,7 +429,7 @@ Inside the container, PM2 manages the voice agent process:
 
 ```bash
 # Clone and install dependencies
-git clone <repo-url>
+git clone https://github.com/yourusername/mcp-voice-agent.git
 cd mcp-voice-agent
 npm install
 
@@ -520,7 +520,7 @@ We use a **hybrid deployment strategy** that combines the best of both worlds:
 ```
 
 **What it does:**
-- Installs Node.js 18 LTS
+- Installs Node.js 20 LTS
 - Updates Docker and NVIDIA Container Toolkit
 - Configures system dependencies
 - Tests GPU access and Docker integration
@@ -600,7 +600,7 @@ We use a **hybrid deployment strategy** that combines the best of both worlds:
 **Initial Deployment:**
 ```bash
 # ON YOUR MAC: Clone project and configure environment
-git clone <repo> && cd mcp-voice-agent
+git clone https://github.com/yourusername/mcp-voice-agent.git && cd mcp-voice-agent
 cp .env.example .env  # Configure API keys
 
 # ON YOUR MAC: Bootstrap Jetson system (5 minutes)

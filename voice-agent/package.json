@@ -3,7 +3,6 @@
   "version": "1.0.0",
   "description": "Voice Finance Assistant with Claude and MCP integration",
   "main": "dist/index.js",
-  "type": "module",
   "scripts": {
     "dev": "tsx watch src/index.ts",
     "build": "tsc",

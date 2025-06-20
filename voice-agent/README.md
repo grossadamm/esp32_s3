@@ -5,16 +5,112 @@ Voice-enabled finance assistant with real-time streaming audio, adaptive speech 
 ## Features ✨
 
 - **Real-time Speech-to-Speech**: OpenAI Realtime API for instant voice conversations via WebSocket
+- **MCP Realtime Bridge**: Seamless integration of MCP tools with OpenAI Realtime API for voice-driven execution
 - **Adaptive Speech-to-Text**: GPU-aware audio processing with cloud fallback using AdaptiveSTTService
 - **Verbal Response Optimization**: LLM responses optimized for spoken delivery vs text consumption
 - **Unified Audio Processing**: Complete audio-to-audio pipeline with TTS generation
 - **Live Audio Streaming**: WebSocket-based streaming with real-time transcription and response
 - **Text Processing**: Direct text queries with detailed formatting for financial AI assistant
-- **MCP Integration**: Dynamic tool discovery from finance MCP server with real-time execution
+- **MCP Integration**: Dynamic tool discovery from MCP servers with real-time execution and argument parsing
 - **Multi-LLM Support**: OpenAI GPT-4 and Anthropic Claude providers with context switching
 - **GPU Acceleration**: NVIDIA hardware detection and optimization for 60-80% faster processing
 - **Standardized Error Handling**: Consistent error responses with proper HTTP status codes
 - **Financial Tools**: House affordability, retirement planning, expense analysis with live interaction
+
+## MCP Realtime Bridge 🌉
+
+The voice agent implements a sophisticated **MCP Realtime Bridge** (`MCPRealtimeBridge.ts`) that seamlessly integrates MCP tools with the OpenAI Realtime API for voice-driven tool execution.
+
+### Bridge Architecture
+
+**Core Components:**
+- **Tool Discovery**: Automatically fetches available tools from all connected MCP servers
+- **Format Conversion**: Converts MCP tool schemas to OpenAI Realtime API format
+- **Argument Parsing**: Handles conversion between JSON strings (from OpenAI) and JavaScript objects (for MCP)
+- **Execution Engine**: Routes tool calls to appropriate MCP servers and returns results
+- **Error Handling**: Graceful fallback with detailed error reporting
+
+### Bridge Features
+
+**Automatic Tool Discovery:**
+```typescript
+// Bridge automatically discovers all available MCP tools
+const realtimeTools = await bridge.convertMCPToolsToRealtimeFormat();
+// Returns: 12 tools (7 finance + 5 dev tools) in OpenAI Realtime format
+```
+
+**Seamless Integration:**
+- **Session Configuration**: Automatically configures OpenAI Realtime sessions with all MCP tools
+- **Real-time Execution**: Tools are callable during live voice conversations
+- **Argument Validation**: Proper JSON parsing and schema validation
+- **Error Recovery**: Falls back gracefully when tools fail
+
+**Current Tool Inventory:**
+- **Finance Tools (7)**: Amazon transactions, house affordability, retirement planning, expense analysis, etc.
+- **Dev Tools (5)**: Project management, HTTP servers, database queries, development utilities, etc.
+- **Total**: 12 tools available for voice interaction
+
+### Technical Implementation
+
+**Tool Conversion Process:**
+```typescript
+// 1. Fetch MCP tools with their schemas
+const mcpTools = await this.mcpClient.getAvailableTools();
+
+// 2. Convert to OpenAI Realtime format
+const realtimeTools = mcpTools.map(tool => ({
+    type: "function",
+    name: tool.name,
+    description: tool.description,
+    parameters: tool.input_schema  // MCP -> OpenAI format
+}));
+```
+
+**Argument Parsing Fix:**
+```typescript
+// Handle OpenAI's JSON string arguments
+if (typeof args === 'string') {
+    parsedArgs = JSON.parse(args);  // Convert to JavaScript object
+}
+await this.mcpClient.executeTool(toolName, parsedArgs);
+```
+
+**Error Handling:**
+- **Parsing Errors**: Invalid JSON arguments are caught and reported
+- **Execution Errors**: Tool failures return structured error responses
+- **Network Errors**: MCP server connection issues are handled gracefully
+- **Fallback Behavior**: System continues operating even if some tools fail
+
+### Bridge Usage in Realtime Audio
+
+The bridge is automatically initialized when a WebSocket client connects:
+
+```typescript
+// Bridge is created and tools are discovered
+const mcpBridge = new MCPRealtimeBridge(mcpClient);
+const realtimeTools = await mcpBridge.convertMCPToolsToRealtimeFormat();
+
+// OpenAI session is configured with all available tools
+session.tools = realtimeTools;
+
+// During conversation, tools are executed via the bridge
+if (event.type === 'response.function_call_arguments.done') {
+    const result = await mcpBridge.executeMCPTool(event.name, event.arguments);
+}
+```
+
+### Performance & Reliability
+
+**Optimizations:**
+- **Tool Caching**: Tool definitions are cached for fast session setup
+- **Async Execution**: Non-blocking tool execution during conversations
+- **Connection Pooling**: Reuses MCP client connections efficiently
+- **Error Isolation**: Failed tools don't impact other tool functionality
+
+**Monitoring:**
+- **Execution Timing**: Logs tool execution duration for performance monitoring
+- **Success/Failure Tracking**: Detailed logging of tool call outcomes
+- **Error Classification**: Structured error reporting for debugging
 
 ## API Endpoints
 
@@ -169,13 +265,15 @@ The voice agent supports multiple processing modes with MCP integration:
 
 ### Real-time Audio Streaming Flow 🎙️ **NEW**
 1. **WebSocket Connection**: Client establishes persistent connection
-2. **Live Audio Input**: Continuous audio chunks streamed to OpenAI Realtime API
-3. **Real-time STT**: Instant transcription with live display
-4. **Tool Discovery**: MCP client fetches available tools from finance server
-5. **Function Calling**: OpenAI identifies required tools during conversation
-6. **Tool Execution**: MCP client executes financial analysis tools in real-time
-7. **Streaming Response**: OpenAI generates and streams audio response immediately
-8. **Live Playback**: Audio chunks played as they arrive for natural conversation
+2. **MCP Bridge Initialization**: MCPRealtimeBridge discovers and converts all available MCP tools
+3. **Session Configuration**: OpenAI Realtime session configured with all 12 MCP tools
+4. **Live Audio Input**: Continuous audio chunks streamed to OpenAI Realtime API
+5. **Real-time STT**: Instant transcription with live display
+6. **Function Calling**: OpenAI identifies required tools during conversation
+7. **Bridge Execution**: MCPRealtimeBridge parses arguments and executes MCP tools in real-time
+8. **Tool Results**: Financial/dev tool results returned to OpenAI for response generation
+9. **Streaming Response**: OpenAI generates and streams audio response with tool results
+10. **Live Playback**: Audio chunks played as they arrive for natural conversation
 
 ### Traditional Audio Processing Flow
 1. **Audio Input**: Multer handles file uploads with format validation

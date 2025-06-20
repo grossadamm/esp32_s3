@@ -84,6 +84,7 @@ The application uses Docker Compose with **3 separate containers** for clean ser
 
 ### Voice Agent ✨ **ENHANCED**
 - **OpenAI Realtime API Integration**: True real-time speech-to-speech conversations with streaming audio via WebSocket
+- **MCP Realtime Bridge**: Seamless integration of MCP tools with OpenAI Realtime API for voice-driven tool execution
 - **Adaptive Speech-to-Text**: GPU-aware audio processing with cloud fallback using AdaptiveSTTService
 - **Verbal Response Optimization**: LLM responses optimized for spoken delivery with conversational patterns
 - **Text-to-Speech**: AI response generation with OpenAI TTS for hardware consumption
@@ -91,7 +92,7 @@ The application uses Docker Compose with **3 separate containers** for clean ser
 - **Real-time Audio Streaming**: WebSocket-based streaming audio for instant voice interactions
 - **Text Processing**: Direct text input processing with detailed formatting
 - **Multi-LLM Support**: Claude 3.5 Sonnet and GPT-4 support with verbal/text context switching
-- **MCP Integration**: Tool calling via Model Context Protocol with real-time execution
+- **MCP Integration**: Tool calling via Model Context Protocol with real-time execution and argument parsing
 - **Standardized Error Handling**: Consistent error responses with proper HTTP status codes and structured logging
 - **RESTful API**: Express.js server with comprehensive audio and text endpoints
 
@@ -142,6 +143,36 @@ Live interruption support ←←←←←←←←←←←←←←←←←←
 - **Live Analysis**: Real-time financial queries with immediate spoken responses
 - **Interactive Sessions**: Extended conversations with context retention
 - **Hardware Integration**: Perfect for ESP32, mobile apps, or voice devices
+
+### MCP Realtime Bridge 🌉 **NEW**
+The voice agent includes a sophisticated **MCP Realtime Bridge** that seamlessly connects MCP tools with the OpenAI Realtime API:
+
+**Bridge Features:**
+- **Automatic Tool Discovery**: Dynamically loads all available MCP tools (currently 12 tools from finance + dev servers)
+- **Format Conversion**: Converts MCP tool schemas to OpenAI Realtime API format automatically
+- **Argument Parsing**: Handles argument conversion between JSON strings and JavaScript objects
+- **Real-time Execution**: Executes MCP tools during live voice conversations
+- **Error Handling**: Graceful fallback and error reporting for failed tool calls
+- **Session Management**: Configures OpenAI sessions with all available MCP tools
+
+**Technical Implementation:**
+```typescript
+// MCPRealtimeBridge automatically:
+// 1. Discovers tools from MCP servers
+const realtimeTools = await bridge.convertMCPToolsToRealtimeFormat();
+
+// 2. Configures OpenAI Realtime session
+session.tools = realtimeTools; // 12 tools available
+
+// 3. Handles function calls during conversation
+await bridge.executeMCPTool(toolName, args);
+```
+
+**Available Tools via Bridge:**
+- **Finance Tools (7)**: Amazon transactions, house affordability, retirement planning, etc.
+- **Dev Tools (5)**: Project management, HTTP servers, database queries, etc.
+- **Real-time Execution**: All tools callable during voice conversations
+- **Argument Validation**: Proper JSON parsing and validation for tool parameters
 
 ### Verbal Response Optimization
 The voice agent now automatically optimizes responses based on output format:

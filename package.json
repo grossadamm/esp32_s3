@@ -16,7 +16,7 @@
     "start:voice": "npm run start --workspace=voice-agent",
     "start:finance-mcp": "npm run start --workspace=mcp-servers/finance-mcp",
     "dev:finance-mcp": "npm run dev --workspace=mcp-servers/finance-mcp",
-    "dev:finance-http": "npm run dev:http --workspace=mcp-servers/finance-mcp",
+
     "docker:build": "docker compose build",
     "docker:up": "docker compose up -d",
     "docker:down": "docker compose down",

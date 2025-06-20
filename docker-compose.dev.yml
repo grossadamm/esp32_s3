@@ -14,40 +14,15 @@ services:
       - STT_PREFER_LOCAL=false  # Use cloud STT for development
       - DEBUG=*
     volumes:
-      - ./data:/data
+      - ./data:/app/data
       - ./logs:/app/logs
-      - ./uploads:/app/voice-agent/uploads
+      - ./uploads:/app/uploads
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:3000/health"]
       interval: 30s
       timeout: 10s
       retries: 3
-
-  dev-tools-api:
-    build: .
-    environment:
-      - NODE_ENV=development
-    volumes:
-      - ./data:/data
-      - ./logs:/app/logs
-    command: ["node", "mcp-servers/dev-tools-mcp/dist/http-server.js"]
-    restart: unless-stopped
-    depends_on:
-      - mcp-voice-agent
-
-  finance-api:
-    build: .
-    environment:
-      - NODE_ENV=development
-      - PORT=3000
-    volumes:
-      - ./data:/data
-      - ./logs:/app/logs
-    command: ["node", "mcp-servers/finance-mcp/dist/http-server.js"]
-    restart: unless-stopped
-    depends_on:
-      - mcp-voice-agent
 
 volumes:
   logs:

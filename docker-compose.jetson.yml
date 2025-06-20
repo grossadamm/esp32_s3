@@ -35,55 +35,6 @@ services:
       timeout: 10s
       retries: 3
       start_period: 60s
-    depends_on:
-      - finance-api
-      - dev-tools-api
-
-  finance-api:
-    build:
-      context: .
-      dockerfile: Dockerfile.jetson
-    restart: unless-stopped
-    environment:
-      - NODE_ENV=production
-      - PORT=3001
-    volumes:
-      - ./data:/app/data
-      - ./logs:/app/logs
-    networks:
-      - mcp-network
-    ports:
-      - "3001:3001"
-    command: ["node", "mcp-servers/finance-mcp/dist/http-server.js"]
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:3001/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 30s
-
-  dev-tools-api:
-    build:
-      context: .
-      dockerfile: Dockerfile.jetson
-    restart: unless-stopped
-    environment:
-      - NODE_ENV=production
-      - PORT=3002
-    volumes:
-      - ./data:/app/data
-      - ./logs:/app/logs
-    networks:
-      - mcp-network
-    ports:
-      - "3002:3002"
-    command: ["node", "mcp-servers/dev-tools-mcp/dist/http-server.js"]
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:3002/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 30s
 
   # Optional: Dedicated GPU Whisper service
   whisper-gpu:

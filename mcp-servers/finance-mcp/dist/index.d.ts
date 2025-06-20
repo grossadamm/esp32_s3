@@ -66,6 +66,18 @@ export declare class FinanceService {
                 processed: number;
                 imported: number;
             };
+            refunds: {
+                processed: number;
+                imported: number;
+            };
+            digital_orders: {
+                processed: number;
+                imported: number;
+            };
+            digital_refunds: {
+                processed: number;
+                imported: number;
+            };
         };
         message: string;
     }>;

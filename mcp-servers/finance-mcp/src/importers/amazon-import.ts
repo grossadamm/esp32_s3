@@ -50,6 +50,9 @@ export class SimpleAmazonImporter {
       orders: { processed: number; imported: number };
       returns: { processed: number; imported: number };
       rentals: { processed: number; imported: number };
+      refunds: { processed: number; imported: number };
+      digital_orders: { processed: number; imported: number };
+      digital_refunds: { processed: number; imported: number };
     };
     message: string;
   }> {
@@ -68,7 +71,10 @@ export class SimpleAmazonImporter {
     const summary = {
       orders: { processed: 0, imported: 0 },
       returns: { processed: 0, imported: 0 },
-      rentals: { processed: 0, imported: 0 }
+      rentals: { processed: 0, imported: 0 },
+      refunds: { processed: 0, imported: 0 },
+      digital_orders: { processed: 0, imported: 0 },
+      digital_refunds: { processed: 0, imported: 0 }
     };
 
     // Import orders
@@ -95,7 +101,25 @@ export class SimpleAmazonImporter {
       console.log(`  🏠 Rentals: ${rentalResult.imported}/${rentalResult.processed} imported`);
     }
 
-    const totalImported = summary.orders.imported + summary.returns.imported + summary.rentals.imported;
+    // Import return payments (actual refund amounts)
+    const paymentsPath = path.join(expandedPath, 'Retail.OrdersReturned.Payments.1', 'Retail.OrdersReturned.Payments.1.csv');
+    if (fs.existsSync(paymentsPath)) {
+      const paymentResult = await this.importFile(paymentsPath, 'refund');
+      summary.refunds = paymentResult;
+      console.log(`  💰 Refunds: ${paymentResult.imported}/${paymentResult.processed} imported`);
+    }
+
+    // Import digital orders
+    const digitalOrdersResult = await this.importDigitalOrders(expandedPath);
+    summary.digital_orders = digitalOrdersResult;
+    console.log(`  📱 Digital Orders: ${digitalOrdersResult.imported}/${digitalOrdersResult.processed} imported`);
+
+    // Import digital refunds
+    const digitalRefundsResult = await this.importDigitalRefunds(expandedPath);
+    summary.digital_refunds = digitalRefundsResult;
+    console.log(`  💳 Digital Refunds: ${digitalRefundsResult.imported}/${digitalRefundsResult.processed} imported`);
+
+    const totalImported = summary.orders.imported + summary.returns.imported + summary.rentals.imported + summary.refunds.imported + summary.digital_orders.imported + summary.digital_refunds.imported;
     
     console.log(`✅ Amazon import complete! Total imported: ${totalImported} transactions`);
     
@@ -180,7 +204,11 @@ export class SimpleAmazonImporter {
               transaction.details
             ]);
             imported++;
+          } else if (transactionType === 'refund') {
+            console.log(`⚠️  Refund ${transaction.transaction_id} already exists, skipping`);
           }
+        } else if (transactionType === 'refund') {
+          console.log(`⚠️  Refund row ${processed} failed to parse`);
         }
       } catch (error) {
         console.error(`❌ Error processing ${transactionType} record ${processed}:`, error);
@@ -206,11 +234,15 @@ export class SimpleAmazonImporter {
           return this.parseReturnRow(row);
         case 'rental':
           return this.parseRentalRow(row);
+        case 'refund':
+          return this.parseRefundRow(row);
+        case 'digital_refund':
+          return this.parseDigitalRefundRow(row);
         default:
           throw new Error(`Unknown transaction type: ${transactionType}`);
       }
     } catch (error) {
-      console.error(`Error parsing ${transactionType} row:`, error);
+      // Skip invalid rows instead of stopping the import
       return null;
     }
   }
@@ -296,8 +328,39 @@ export class SimpleAmazonImporter {
     };
   }
 
+  parseRefundRow(row: any): AmazonTransaction {
+    const refundId = row['ReversalID'];
+    const refundDate = this.parseDate(row['RefundCompletionDate']);
+    const refundAmount = this.parseAmount(row['AmountRefunded']);
+    
+    // Skip rows with "Not Applicable" or missing critical data
+    if (!refundId || !refundDate || row['RefundCompletionDate'] === 'Not Applicable') {
+      throw new Error('Missing required refund fields');
+    }
+
+    // Handle BOM character in CSV - first key might have UTF-8 BOM prefix
+    const keys = Object.keys(row);
+    const orderIdKey = keys.find(key => key.includes('OrderID')) || 'OrderID';
+
+    return {
+      transaction_id: `refund_${refundId}`, // Prefix to avoid conflict with return ReversalIDs
+      transaction_type: 'refund',
+      date: refundDate,
+      status: row['Status'] || 'Unknown',
+      product_name: `Refund: ${row['DisbursementType'] || 'Payment'}`,
+      amount: Math.abs(refundAmount), // Refunds are positive (money in)
+      details: JSON.stringify({
+        original_order_id: row[orderIdKey],
+        original_reversal_id: refundId, // Keep the original ReversalID for reference
+        disbursement_type: row['DisbursementType'],
+        currency: row['Currency'],
+        amount_refunded: refundAmount
+      })
+    };
+  }
+
   parseDate(dateStr: string): string | null {
-    if (!dateStr || dateStr === 'Not Available') {
+    if (!dateStr || dateStr === 'Not Available' || dateStr === 'Not Applicable') {
       return null;
     }
 
@@ -320,7 +383,7 @@ export class SimpleAmazonImporter {
   }
 
   parseAmount(amountStr: string): number {
-    if (!amountStr || amountStr === 'Not Available' || amountStr === '') {
+    if (!amountStr || amountStr === 'Not Available' || amountStr === 'Not Applicable' || amountStr === '') {
       return 0;
     }
 
@@ -406,6 +469,170 @@ export class SimpleAmazonImporter {
         } : null
       }
     };
+  }
+
+  async importDigitalOrders(dataPath: string): Promise<{ processed: number; imported: number }> {
+    const ordersPath = path.join(dataPath, 'Digital-Ordering.1', 'Digital Orders.csv');
+    const monetaryPath = path.join(dataPath, 'Digital-Ordering.1', 'Digital Orders Monetary.csv');
+    
+    if (!fs.existsSync(ordersPath) || !fs.existsSync(monetaryPath)) {
+      console.log('  📱 Digital order files not found, skipping');
+      return { processed: 0, imported: 0 };
+    }
+
+    console.log(`📂 Reading digital orders: ${path.basename(ordersPath)} + ${path.basename(monetaryPath)}`);
+    
+    // Read both files
+    const ordersContent = fs.readFileSync(ordersPath, 'utf-8');
+    const monetaryContent = fs.readFileSync(monetaryPath, 'utf-8');
+    
+    const ordersRecords = parse(ordersContent, {
+      columns: true, skip_empty_lines: true, trim: true, relax_quotes: true, escape: '"'
+    });
+    
+    const monetaryRecords = parse(monetaryContent, {
+      columns: true, skip_empty_lines: true, trim: true, relax_quotes: true, escape: '"'
+    });
+
+    // Group monetary records by DeliveryPacketId
+    const monetaryByPacket = new Map<string, any[]>();
+    for (const monetary of monetaryRecords) {
+      const packetId = monetary.DeliveryPacketId;
+      if (!monetaryByPacket.has(packetId)) {
+        monetaryByPacket.set(packetId, []);
+      }
+      monetaryByPacket.get(packetId)!.push(monetary);
+    }
+
+    let processed = 0;
+    let imported = 0;
+
+    for (const order of ordersRecords) {
+      processed++;
+      
+      const packetId = order.DeliveryPacketId;
+      const monetaryTransactions = monetaryByPacket.get(packetId) || [];
+      
+      // Calculate total amount for this order
+      let totalAmount = 0;
+      const components: any[] = [];
+      
+      for (const monetary of monetaryTransactions) {
+        const amount = this.parseAmount(monetary.TransactionAmount);
+        totalAmount += amount;
+        components.push({
+          type: monetary.MonetaryComponentTypeCode,
+          amount: amount,
+          currency: monetary.BaseCurrencyCode
+        });
+      }
+      
+      // Skip if no monetary transactions or zero amount
+      if (totalAmount === 0) continue;
+      
+      try {
+        const transaction = this.parseDigitalOrderRow(order, totalAmount, components);
+        if (transaction) {
+          const existing = await this.db.get(
+            'SELECT id FROM amazon_transactions WHERE transaction_id = ?',
+            [transaction.transaction_id]
+          );
+
+          if (!existing) {
+            await this.db.run(`
+              INSERT INTO amazon_transactions 
+              (transaction_id, transaction_type, date, status, product_name, amount, details)
+              VALUES (?, ?, ?, ?, ?, ?, ?)
+            `, [
+              transaction.transaction_id,
+              transaction.transaction_type,
+              transaction.date,
+              transaction.status,
+              transaction.product_name,
+              transaction.amount,
+              transaction.details
+            ]);
+            imported++;
+          }
+        }
+      } catch (error) {
+        console.error(`❌ Error processing digital order record ${processed}:`, error);
+      }
+    }
+
+    console.log(`📊 Found ${ordersRecords.length} digital orders with ${monetaryRecords.length} monetary transactions`);
+    return { processed, imported };
+  }
+
+  async importDigitalRefunds(dataPath: string): Promise<{ processed: number; imported: number }> {
+    const refundsPath = path.join(dataPath, 'Digital.Orders.Returns.1', 'Digital.Orders.Returns.Monetary.1.csv');
+    
+    if (!fs.existsSync(refundsPath)) {
+      console.log('  💳 Digital refunds file not found, skipping');
+      return { processed: 0, imported: 0 };
+    }
+
+    return await this.importFile(refundsPath, 'digital_refund');
+  }
+
+  private parseDigitalOrderRow(order: any, amount: number, components: any[]): AmazonTransaction {
+    const orderId = order.OrderId;
+    const orderDate = this.parseDate(order.OrderDate);
+    
+    if (!orderId || !orderDate || orderId.trim() === '' || orderDate.trim() === '') {
+      console.log(`⚠️  Digital order missing fields - OrderId: "${orderId}", OrderDate: "${order.OrderDate}" -> parsed: "${orderDate}"`);
+      throw new Error('Missing required digital order fields');
+    }
+
+    return {
+      transaction_id: `digital_${orderId}`,
+      transaction_type: 'digital_purchase',
+      date: orderDate,
+      status: order.OrderStatus || 'Unknown',
+      product_name: `Digital Purchase: ${order.Marketplace || 'Amazon'}`,
+      amount: -Math.abs(amount), // Digital purchases are negative (money out)
+      details: JSON.stringify({
+        marketplace: order.Marketplace,
+        delivery_packet_id: order.DeliveryPacketId,
+        order_status: order.OrderStatus,
+        components: components,
+        country_code: order.CountryCode,
+        subscription_type: order.SubscriptionOrderType
+      })
+    };
+  }
+
+  private parseDigitalRefundRow(row: any): AmazonTransaction {
+    const packetId = row.DeliveryPacketId;
+    const orderId = row.OrderId;
+    const refundDate = this.parseDate(row.OrderDate) || new Date().toISOString().split('T')[0];
+    const refundAmount = this.parseAmount(row.TransactionAmount);
+    
+    if (!packetId || !orderId) {
+      throw new Error('Missing required digital refund fields');
+    }
+
+    return {
+      transaction_id: `digital_refund_${packetId}`,
+      transaction_type: 'digital_refund',
+      date: refundDate,
+      status: 'Refunded',
+      product_name: `Digital Refund: ${row.ReasonCode || 'Unknown reason'}`,
+      amount: Math.abs(refundAmount), // Refunds are positive (money in)
+      details: JSON.stringify({
+        original_order_id: orderId,
+        delivery_packet_id: packetId,
+        reason_code: row.ReasonCode,
+        condition_code: row.ConditionCode,
+        currency: row.BaseCurrencyCode,
+        monetary_component_type: row.MonetaryComponentType
+      })
+    };
+  }
+
+  async clearTables(): Promise<void> {
+    await this.db.run('DELETE FROM amazon_transactions');
+    await this.db.run('DELETE FROM amazon_import_log');
   }
 
   close(): void {

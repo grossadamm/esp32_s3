@@ -440,7 +440,7 @@ class FinanceMCPServer {
                 transaction_type: {
                   type: 'string',
                   description: 'Type of transactions to retrieve',
-                  enum: ['order', 'return', 'rental', 'all'],
+                  enum: ['order', 'return', 'rental', 'refund', 'all'],
                   default: 'all',
                 },
                 days_back: {

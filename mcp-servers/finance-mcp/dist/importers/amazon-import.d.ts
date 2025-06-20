@@ -25,6 +25,18 @@ export declare class SimpleAmazonImporter {
                 processed: number;
                 imported: number;
             };
+            refunds: {
+                processed: number;
+                imported: number;
+            };
+            digital_orders: {
+                processed: number;
+                imported: number;
+            };
+            digital_refunds: {
+                processed: number;
+                imported: number;
+            };
         };
         message: string;
     }>;
@@ -34,6 +46,7 @@ export declare class SimpleAmazonImporter {
     private parseOrderRow;
     private parseReturnRow;
     parseRentalRow(row: any): AmazonTransaction;
+    parseRefundRow(row: any): AmazonTransaction;
     parseDate(dateStr: string): string | null;
     parseAmount(amountStr: string): number;
     listAmazonTransactions(transactionType?: string, daysBack?: number, statusFilter?: string): Promise<{
@@ -47,6 +60,17 @@ export declare class SimpleAmazonImporter {
             } | null;
         };
     }>;
+    importDigitalOrders(dataPath: string): Promise<{
+        processed: number;
+        imported: number;
+    }>;
+    importDigitalRefunds(dataPath: string): Promise<{
+        processed: number;
+        imported: number;
+    }>;
+    private parseDigitalOrderRow;
+    private parseDigitalRefundRow;
+    clearTables(): Promise<void>;
     close(): void;
 }
 export {};

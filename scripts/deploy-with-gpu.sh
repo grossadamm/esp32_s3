@@ -72,14 +72,10 @@ check_docker_nvidia() {
 # Deploy with appropriate configuration
 deploy_application() {
     echo ""
-    echo "🏗️  Deploying Voice Agent..."
-    
-    # Stop existing containers
-    echo "Stopping existing containers..."
-    docker compose down || true
+    echo "🏗️  Building Voice Agent..."
     
     if [ "$GPU_SUPPORT" = true ]; then
-        echo "🎯 Deploying with GPU acceleration..."
+        echo "🎯 Building with GPU acceleration..."
         
         # Verify GPU access in docker-compose.yml
         if ! grep -q "nvidia" docker-compose.yml; then
@@ -87,12 +83,18 @@ deploy_application() {
             echo "   Make sure it includes GPU support settings"
         fi
         
-        # Build and run with GPU support
-        docker compose build
+        # Build first (don't stop existing containers yet)
+        if ! docker compose build; then
+            echo "❌ Build failed! Keeping existing deployment running."
+            return 1
+        fi
+        
+        echo "✅ Build successful! Stopping existing containers..."
+        docker compose down || true
         docker compose up -d
         
     else
-        echo "💻 Deploying with CPU-only configuration..."
+        echo "💻 Building with CPU-only configuration..."
         
         # Create a temporary docker-compose.override.yml to disable GPU settings
         cat > docker-compose.override.yml << EOF
@@ -109,8 +111,15 @@ services:
       # GPU environment variables removed for CPU-only
 EOF
         
-        # Build and run without GPU
-        docker compose build
+        # Build first (don't stop existing containers yet)
+        if ! docker compose build; then
+            echo "❌ Build failed! Keeping existing deployment running."
+            rm -f docker-compose.override.yml
+            return 1
+        fi
+        
+        echo "✅ Build successful! Stopping existing containers..."
+        docker compose down || true
         docker compose up -d
         
         # Clean up override file

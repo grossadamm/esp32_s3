@@ -13,11 +13,15 @@ mcp-voice-agent/
 │   │   │   ├── OpenAIService.ts    # OpenAI LLM provider
 │   │   │   ├── MCPClient.ts        # MCP client for tool integration
 │   │   │   ├── LLMFactory.ts       # LLM provider factory
+│   │   │   ├── AdaptiveSTTService.ts # GPU-aware speech recognition
+│   │   │   ├── HardwareDetectionService.ts # Hardware capability detection
 │   │   │   └── FileCleanupService.ts
 │   │   ├── routes/
-│   │   │   ├── audio.ts            # Voice/audio processing endpoint
-│   │   │   ├── audio-esp32.ts      # ESP32-optimized audio endpoint
+│   │   │   ├── audio.ts            # Unified audio processing endpoint
 │   │   │   └── text.ts             # Text processing endpoint
+│   │   ├── utils/
+│   │   │   ├── errorUtils.ts       # Standardized error handling
+│   │   │   └── logger.ts           # Structured logging with context
 │   │   └── index.ts                # Main application entry point
 │   ├── tests/                      # Test files and audio samples
 │   └── package.json
@@ -61,7 +65,8 @@ The application uses Docker Compose with **3 separate containers** for clean ser
 │ │ - Text API      │ │    │ │ - Account Info  │ │    │ │ - Project State │ │
 │ │ - Audio API     │ │    │ │ - Transactions  │ │    │ │ - SQLite DB     │ │
 │ │ - MCP Client    │ │    │ │ - Analysis      │ │    │ │                 │ │
-│ │ - ESP32 Support │ │    │ │ - Read-Only DB  │ │    │ │                 │ │
+│ │ - GPU-Aware STT │ │    │ │ - Read-Only DB  │ │    │ │                 │ │
+│ │ - Verbal LLM    │ │    │ │                 │ │    │ │                 │ │
 │ └─────────────────┘ │    │ └─────────────────┘ │    │ └─────────────────┘ │
 └─────────┬───────────┘    └─────────────────────┘    └─────────────────────┘
           │                                                                   
@@ -77,14 +82,16 @@ The application uses Docker Compose with **3 separate containers** for clean ser
 
 ## Features
 
-### Voice Agent
-- **Speech-to-Text**: Audio file upload and transcription using OpenAI Whisper
-- **Text-to-Speech**: AI response generation with OpenAI TTS (for ESP32)
-- **Text Processing**: Direct text input processing  
-- **Multi-LLM Support**: Claude 3.5 Sonnet and GPT-4 support
+### Voice Agent ✨ **ENHANCED**
+- **Adaptive Speech-to-Text**: GPU-aware audio processing with cloud fallback using AdaptiveSTTService
+- **Verbal Response Optimization**: LLM responses optimized for spoken delivery with conversational patterns
+- **Text-to-Speech**: AI response generation with OpenAI TTS for hardware consumption
+- **Unified Audio Endpoint**: Single `/api/audio` endpoint for complete audio-to-audio pipeline
+- **Text Processing**: Direct text input processing with detailed formatting
+- **Multi-LLM Support**: Claude 3.5 Sonnet and GPT-4 support with verbal/text context switching
 - **MCP Integration**: Tool calling via Model Context Protocol
-- **Dual Audio Endpoints**: ESP32-optimized (returns audio) and debug (returns JSON)
-- **RESTful API**: Express.js server with audio and text endpoints
+- **Standardized Error Handling**: Consistent error responses with proper HTTP status codes and structured logging
+- **RESTful API**: Express.js server with comprehensive audio and text endpoints
 
 ### Finance MCP Server
 - **MCP Tools**: SQL queries, schema inspection, financial analysis via MCP protocol
@@ -103,7 +110,62 @@ The application uses Docker Compose with **3 separate containers** for clean ser
 - **RESTful API**: Direct HTTP access for project operations
 - **MCP Integration**: Project tools available via MCP protocol
 
-## GPU Acceleration (NEW)
+## New Features ✨
+
+### Verbal Response Optimization
+The voice agent now automatically optimizes responses based on output format:
+
+**Verbal Responses** (for `/api/audio`):
+- Concise, conversational language patterns
+- Typically 1-3 sentences for simple queries
+- Longer explanations (2-4 sentences) only when:
+  - User explicitly asks for detailed analysis
+  - Complex financial concepts need clarification
+  - Multiple factors require consideration
+  - User asks "why" or "how" questions
+- Avoids bullet points, lists, complex formatting
+- Natural spoken language flow
+
+**Text Responses** (for `/api/text`):
+- Detailed formatting with bullet points and lists
+- Comprehensive explanations
+- Technical precision and thoroughness
+- Full structured responses
+
+### Standardized Error Handling
+All API endpoints now use consistent error handling:
+
+**Error Response Format:**
+```json
+{
+  "error": "Human readable message",
+  "message": "Technical details (optional)",
+  "code": "ERROR_TYPE",
+  "timestamp": "2024-01-01T12:00:00.000Z"
+}
+```
+
+**Error Types:**
+- `VALIDATION_ERROR` (400): Invalid input data
+- `EXTERNAL_API_ERROR` (503): External service unavailable (OpenAI, Claude, etc.)
+- `SYSTEM_ERROR` (500): Internal system errors
+
+**Structured Logging:**
+- Timestamped logs with context
+- Error details with stack traces
+- Performance and debugging information
+
+### GPU Acceleration with Adaptive STT
+
+The voice agent features **intelligent speech recognition** that automatically optimizes based on available hardware:
+
+**Adaptive Processing:**
+- **Local GPU**: Uses NVIDIA hardware when available for 60-80% faster processing
+- **Cloud Fallback**: Gracefully falls back to OpenAI Whisper for compatibility
+- **Confidence Scoring**: Switches to cloud for low-confidence local transcriptions
+- **Hardware Detection**: Automatically detects and optimizes for Jetson devices
+
+## GPU Acceleration (ENHANCED)
 
 The voice agent now supports **automatic GPU acceleration** for Speech-to-Text (STT) processing, providing significant latency improvements on NVIDIA hardware.
 
@@ -310,8 +372,8 @@ npm run start:dev-tools-mcp
 
 ### Voice Agent Server (Port 3000 - External Access)
 
-#### POST /api/audio
-Main audio endpoint for ESP32-S3 devices. Returns audio response.
+#### POST /api/audio ✨ **ENHANCED - UNIFIED ENDPOINT**
+Main audio endpoint for complete audio-to-audio processing. Now the single, intelligent audio endpoint.
 
 **Request:**
 - Method: POST  
@@ -320,39 +382,27 @@ Main audio endpoint for ESP32-S3 devices. Returns audio response.
 
 **Response:**
 - Content-Type: audio/mpeg
-- Body: MP3 audio file (AI-generated speech response)
+- Body: MP3 audio file (AI-generated speech response optimized for verbal delivery)
 - Headers:
   - `X-Transcription`: URL-encoded transcription of input audio
   - `X-Tools-Used`: Comma-separated list of tools used
 
+**Features:**
+- **Adaptive STT**: GPU-aware speech recognition with cloud fallback
+- **Verbal LLM**: Responses optimized for spoken delivery
+- **Hardware Agnostic**: Works with ESP32, web, and any audio-capable device
+
 **Usage:**
 ```bash
-# Send audio and receive audio response
+# Send audio and receive optimized audio response
 curl -X POST \
   -F "audio=@input.wav" \
   http://localhost:3000/api/audio \
   --output response.mp3
 ```
 
-#### POST /api/audioDebug
-Debug audio endpoint for development. Returns JSON with detailed information.
-
-**Request:**
-- Method: POST  
-- Content-Type: multipart/form-data
-- Body: audio file (WAV, MP3, M4A, etc.)
-
-**Response:**
-```json
-{
-  "transcription": "What's my account balance?",
-  "response": "Your checking account has $2,450.32 and savings has $15,670.89", 
-  "toolsUsed": ["query_finance_database"]
-}
-```
-
 #### POST /api/text  
-Process text input directly.
+Process text input directly with detailed formatting.
 
 **Request:**
 ```json
@@ -371,6 +421,39 @@ Process text input directly.
 
 #### GET /health
 Health check endpoint.
+
+#### GET /api/hardware-status ✨ **NEW**
+Get hardware detection and GPU capabilities.
+
+**Response:**
+```json
+{
+  "hardwareInfo": {
+    "hasNvidiaGPU": true,
+    "isJetsonDevice": true,
+    "gpuMemory": "4GB"
+  },
+  "timestamp": "2024-01-01T12:00:00.000Z"
+}
+```
+
+#### GET /api/stt-status ✨ **NEW**
+Get speech-to-text service status and configuration.
+
+**Response:**
+```json
+{
+  "hardwareInfo": {...},
+  "localSTTAvailable": true,
+  "activeStrategy": "Local with Cloud Fallback",
+  "health": {
+    "overall": true,
+    "local": true,
+    "cloud": true
+  },
+  "timestamp": "2024-01-01T12:00:00.000Z"
+}
+```
 
 ### Finance HTTP Server (Internal Only)
 
@@ -445,18 +528,13 @@ Delete project by ID.
 # Start the services
 docker compose up -d --build
 
-# Test ESP32 audio endpoint (returns audio response)
+# Test unified audio endpoint (returns optimized audio response)
 curl -X POST \
   -F "audio=@voice-agent/tests/audio/house-affordability.wav" \
   http://localhost:3000/api/audio \
   --output response.mp3
 
-# Test debug audio endpoint (returns JSON response)
-curl -X POST \
-  -F "audio=@voice-agent/tests/audio/house-affordability.wav" \
-  http://localhost:3000/api/audioDebug
-
-# Test text endpoint
+# Test text endpoint (returns detailed text response)
 curl -X POST \
   -H "Content-Type: application/json" \
   -d '{"text": "What are my monthly expenses?"}' \
@@ -468,6 +546,12 @@ curl -X POST \
   -d '{"text": "list my projects"}' \
   http://localhost:3000/api/text
 
+# Check hardware capabilities
+curl http://localhost:3000/api/hardware-status
+
+# Check STT service status
+curl http://localhost:3000/api/stt-status
+
 # Health check
 curl http://localhost:3000/health
 ```
@@ -477,19 +561,45 @@ curl http://localhost:3000/health
 The repository includes test audio files for validation:
 
 ```bash
-# Test ESP32 audio endpoint (get audio response)
+# Test audio endpoint with sample file
 curl -X POST \
   -F "audio=@voice-agent/tests/audio/house-affordability.wav" \
   http://localhost:3000/api/audio \
   --output house-affordability-response.mp3
 
-# Test debug endpoint (get JSON response)
-curl -X POST \
-  -F "audio=@voice-agent/tests/audio/house-affordability.wav" \
-  http://localhost:3000/api/audioDebug
+# Expected: Comprehensive house affordability analysis optimized for spoken delivery
+# Response will be concise, conversational audio suitable for voice assistant playback
+```
 
-# Expected: Comprehensive house affordability analysis with real financial data
-# ESP32 endpoint returns audio file, debug endpoint returns JSON with transcription
+### Error Handling Validation
+
+Test the standardized error responses:
+
+```bash
+# Test validation error
+curl -X POST \
+  -H "Content-Type: application/json" \
+  -d '{"invalid": "data"}' \
+  http://localhost:3000/api/text
+
+# Expected response (400):
+# {
+#   "error": "Missing or invalid text field",
+#   "code": "VALIDATION_ERROR",
+#   "timestamp": "2024-01-01T12:00:00.000Z"
+# }
+
+# Test with invalid audio file
+curl -X POST \
+  -F "audio=@invalid.txt" \
+  http://localhost:3000/api/audio
+
+# Expected response (400):
+# {
+#   "error": "Invalid audio format...",
+#   "code": "VALIDATION_ERROR",
+#   "timestamp": "2024-01-01T12:00:00.000Z"
+# }
 ```
 
 ## Process Management
@@ -532,6 +642,11 @@ The finance HTTP server uses `SQLITE_OPEN_READONLY` mode to prevent any write op
 - Only SELECT statements are allowed through the query endpoint
 - Forbidden keywords (INSERT, UPDATE, DELETE, etc.) are rejected
 - Parameter binding prevents SQL injection attacks
+
+### Error Handling Security
+- **Sensitive Information Protection**: Error messages don't expose internal details
+- **Rate Limiting Ready**: Structured error codes enable external rate limiting
+- **Audit Trail**: All errors logged with context for security monitoring
 
 ## Data Import and Sync
 
@@ -708,6 +823,15 @@ The 3-container architecture provides several advantages:
 2. Add provider to `LLMFactory.ts`
 3. Update environment variable handling
 
+### Error Handling Standards
+
+The project now uses standardized error handling:
+
+1. **Use error utilities**: Import from `utils/errorUtils.ts`
+2. **Structured logging**: Use `utils/logger.ts` for consistent formatting
+3. **Proper classification**: Validation vs External API vs System errors
+4. **Standard responses**: All endpoints return consistent error format
+
 ### Database Security
 
 The HTTP servers implement multiple security layers:
@@ -726,6 +850,8 @@ The HTTP servers implement multiple security layers:
 4. **API key errors**: Check environment variables are set correctly
 5. **Monarch sync fails**: Verify MONARCH_TOKEN is valid and has proper permissions
 6. **Container connection issues**: Ensure Docker Compose network is working
+7. **GPU detection fails**: Check NVIDIA drivers and Container Toolkit installation
+8. **STT errors**: Check `/api/stt-status` and `/api/hardware-status` for diagnostics
 
 ### Debugging
 
@@ -745,6 +871,54 @@ docker compose logs -f finance-api
 docker compose logs -f dev-tools-api
 ```
 
+Check service status:
+```bash
+# Hardware capabilities
+curl http://localhost:3000/api/hardware-status
+
+# STT service health
+curl http://localhost:3000/api/stt-status
+
+# Overall health
+curl http://localhost:3000/health
+```
+
+### Performance Monitoring
+
+Monitor GPU usage during audio processing:
+```bash
+# NVIDIA GPU monitoring
+nvidia-smi -l 1
+
+# Container resource usage
+docker stats
+
+# Voice agent process monitoring
+docker compose exec mcp-voice-agent pm2 monit
+```
+
+## Recent Updates ✨
+
+### Version 2.0 Features
+
+**Enhanced Audio Processing:**
+- Unified `/api/audio` endpoint replacing dual endpoints
+- Adaptive STT with GPU acceleration and cloud fallback
+- Verbal response optimization for natural speech delivery
+- Hardware-aware processing with automatic optimization
+
+**Improved Reliability:**
+- Standardized error handling across all endpoints
+- Structured logging with context and timestamps
+- Proper HTTP status codes and error classification
+- Enhanced debugging capabilities
+
+**Better Performance:**
+- 60-80% faster speech processing with GPU acceleration
+- Confidence-based routing for optimal accuracy
+- Reduced network dependency with local processing
+- Optimized for edge devices like Jetson Nano
+
 ## Contributing
 
 1. Fork the repository
@@ -755,4 +929,4 @@ docker compose logs -f dev-tools-api
 
 ## License
 
-MIT License - see LICENSE file for details. 
+MIT License - see LICENSE file for details.

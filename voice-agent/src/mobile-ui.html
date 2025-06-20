@@ -197,16 +197,18 @@
             }
         }
     </style>
-    <!-- Silero VAD Library -->
-    <script src="https://cdn.jsdelivr.net/npm/onnxruntime-web@1.14.0/dist/ort.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@silero/vad@5.1.2/dist/index.js" onerror="console.error('Failed to load silero VAD library')"></script>
+    <!-- VAD Library (ricky0123/vad-web) -->
+    <script src="https://cdn.jsdelivr.net/npm/onnxruntime-web@1.14.0/dist/ort.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@ricky0123/vad-web@0.0.22/dist/bundle.min.js"></script>
     <script>
         // Debug library loading
         window.addEventListener('load', () => {
             console.log('Page loaded, checking VAD library...');
-            console.log('window.sileroVAD:', typeof window.sileroVAD);
             console.log('window.vad:', typeof window.vad);
-            console.log('Available properties:', Object.getOwnPropertyNames(window).filter(name => name.toLowerCase().includes('vad') || name.toLowerCase().includes('silero')));
+            console.log('window.vad.MicVAD:', window.vad ? typeof window.vad.MicVAD : 'undefined');
+            if (window.vad) {
+                console.log('VAD available methods:', Object.keys(window.vad));
+            }
         });
     </script>
 </head>
@@ -262,58 +264,48 @@
         const transcription = document.getElementById('transcription');
         const recordText = document.getElementById('recordText');
 
-        // 🧠 VAD MANAGER
+        // 🧠 VAD MANAGER  
         async function initializeVAD() {
             try {
-                console.log('🧠 Loading Silero VAD model...');
+                console.log('🧠 Loading VAD model...');
                 updateStatus('Loading VAD...', 'connecting');
-                
-                // Check if VAD library is available
-                console.log('Window object check:', {
-                    sileroVAD: typeof window.sileroVAD,
-                    vad: typeof window.vad,
-                    ortSession: typeof window.ortSession
-                });
                 
                 // Wait for libraries to load if needed
                 let attempts = 0;
-                while ((!window.sileroVAD && !window.vad) && attempts < 10) {
+                while (!window.vad && attempts < 10) {
                     console.log(`Waiting for VAD library... attempt ${attempts + 1}`);
                     await new Promise(resolve => setTimeout(resolve, 500));
                     attempts++;
                 }
                 
-                // Try different API approaches
-                let vadInstance = null;
-                
-                if (window.sileroVAD && window.sileroVAD.createVAD) {
-                    console.log('Using sileroVAD.createVAD API');
-                    vadInstance = await window.sileroVAD.createVAD({
-                        modelURL: 'https://cdn.jsdelivr.net/npm/@silero/vad@latest/dist/silero_vad.onnx',
-                        modelFetch: fetch,
-                    });
-                } else if (window.vad && window.vad.MicVAD) {
-                    console.log('Using vad.MicVAD API');
-                    vadInstance = await window.vad.MicVAD.new({
-                        modelURL: 'https://cdn.jsdelivr.net/npm/@silero/vad@latest/dist/silero_vad.onnx'
-                    });
-                } else {
+                if (!window.vad || !window.vad.MicVAD) {
                     throw new Error('VAD library not found. Available: ' + Object.keys(window).filter(k => k.toLowerCase().includes('vad')).join(', '));
                 }
                 
-                if (vadInstance) {
-                    vad = vadInstance;
-                    vadReady = true;
-                    console.log('✅ VAD model loaded and ready');
-                    updateStatus('VAD Ready', 'vad-ready');
-                    return true;
+                console.log('Using vad.MicVAD API');
+                
+                // Create VAD instance for manual audio processing
+                // We'll use NonRealTimeVAD since we want to manually feed audio data
+                if (window.vad.NonRealTimeVAD) {
+                    vad = await window.vad.NonRealTimeVAD.new();
+                    console.log('✅ NonRealTimeVAD loaded and ready');
                 } else {
-                    throw new Error('Failed to create VAD instance');
+                    // Fallback: try to create a basic VAD instance
+                    vad = await window.vad.MicVAD.new({
+                        onSpeechStart: () => console.log('VAD: Speech start'),
+                        onSpeechEnd: () => console.log('VAD: Speech end'),
+                        onVADMisfire: () => console.log('VAD: Misfire'),
+                    });
+                    console.log('✅ MicVAD loaded as fallback');
                 }
+                
+                vadReady = true;
+                updateStatus('VAD Ready', 'vad-ready');
+                return true;
                 
             } catch (error) {
                 console.error(`❌ VAD initialization failed: ${error.message}`);
-                console.log('Available window objects:', Object.getOwnPropertyNames(window).filter(name => name.toLowerCase().includes('vad') || name.toLowerCase().includes('silero')));
+                console.log('Available window objects:', Object.getOwnPropertyNames(window).filter(name => name.toLowerCase().includes('vad')));
                 updateStatus('VAD Failed - Continuing without', 'connected');
                 return false;
             }
@@ -773,16 +765,14 @@
                         try {
                             let speechProbability = 0;
                             
-                            // Handle different VAD API patterns
-                            if (typeof vad === 'function') {
-                                // Direct function call
-                                speechProbability = await vad(audioData);
+                            // Handle ricky0123/vad-web API patterns
+                            if (vad && typeof vad.processPCMFloat32 === 'function') {
+                                // NonRealTimeVAD API - process Float32Array directly
+                                const vadResult = await vad.processPCMFloat32(audioData);
+                                speechProbability = vadResult.isSpeech ? 1.0 : 0.0;
                             } else if (vad && typeof vad.process === 'function') {
-                                // Object with process method
+                                // Alternative process method
                                 speechProbability = await vad.process(audioData);
-                            } else if (vad && typeof vad.predict === 'function') {
-                                // Object with predict method
-                                speechProbability = await vad.predict(audioData);
                             } else {
                                 console.warn('Unknown VAD API format:', typeof vad, Object.keys(vad || {}));
                                 shouldSendAudio = true; // Fallback to always send
@@ -793,10 +783,10 @@
                             if (isCurrentlySpeaking !== isSpeaking) {
                                 isSpeaking = isCurrentlySpeaking;
                                 if (isSpeaking) {
-                                    console.log('🗣️ Speech detected (VAD)', speechProbability.toFixed(3));
+                                    console.log('🗣️ Speech detected (VAD)', speechProbability);
                                     updateStatus('Speaking...', 'speaking');
                                 } else {
-                                    console.log('🤫 Speech ended (VAD)', speechProbability.toFixed(3));
+                                    console.log('🤫 Speech ended (VAD)', speechProbability);
                                     updateStatus('Recording...', 'recording');
                                 }
                             }

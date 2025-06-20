@@ -51,9 +51,9 @@
             font-size: 12px;
         }
     </style>
-    <!-- Silero VAD Library -->
-    <script src="https://cdn.jsdelivr.net/npm/onnxruntime-web@1.14.0/dist/ort.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@silero/vad@latest/dist/index.js"></script>
+    <!-- VAD Library (ricky0123/vad-web) -->
+    <script src="https://cdn.jsdelivr.net/npm/onnxruntime-web@1.14.0/dist/ort.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@ricky0123/vad-web@0.0.22/dist/bundle.min.js"></script>
 </head>
 <body>
     <h1>🎙️ Realtime Audio Test Client</h1>
@@ -177,13 +177,35 @@
         // 🎤 VAD MANAGER
         async function initializeVAD() {
             try {
-                log('🧠 Loading Silero VAD model...');
-                vad = await window.sileroVAD.createVAD({
-                    modelURL: 'https://cdn.jsdelivr.net/npm/@silero/vad@latest/dist/silero_vad.onnx',
-                    modelFetch: fetch,
-                });
+                log('🧠 Loading VAD model...');
+                
+                // Wait for library to load
+                let attempts = 0;
+                while (!window.vad && attempts < 10) {
+                    log(`Waiting for VAD library... attempt ${attempts + 1}`);
+                    await new Promise(resolve => setTimeout(resolve, 500));
+                    attempts++;
+                }
+                
+                if (!window.vad || !window.vad.MicVAD) {
+                    throw new Error('VAD library not found');
+                }
+                
+                // Create VAD instance for manual audio processing
+                if (window.vad.NonRealTimeVAD) {
+                    vad = await window.vad.NonRealTimeVAD.new();
+                    log('✅ NonRealTimeVAD loaded and ready');
+                } else {
+                    // Fallback
+                    vad = await window.vad.MicVAD.new({
+                        onSpeechStart: () => log('VAD: Speech start'),
+                        onSpeechEnd: () => log('VAD: Speech end'),
+                        onVADMisfire: () => log('VAD: Misfire'),
+                    });
+                    log('✅ MicVAD loaded as fallback');
+                }
+                
                 vadReady = true;
-                log('✅ VAD model loaded and ready');
                 updateStatus('VAD Ready', 'vad-ready');
                 return true;
             } catch (error) {
@@ -327,7 +349,13 @@
                     const audioData = inputBuffer.getChannelData(0);
                     
                     // 🎤 VAD CHECK - Only send if speech detected
-                    const speechProbability = await vad(audioData);
+                    let speechProbability = 0;
+                    if (vad && typeof vad.processPCMFloat32 === 'function') {
+                        const vadResult = await vad.processPCMFloat32(audioData);
+                        speechProbability = vadResult.isSpeech ? 1.0 : 0.0;
+                    } else if (vad && typeof vad.process === 'function') {
+                        speechProbability = await vad.process(audioData);
+                    }
                     const isCurrentlySpeaking = speechProbability > 0.5; // Threshold
                     
                     if (isCurrentlySpeaking !== isSpeaking) {

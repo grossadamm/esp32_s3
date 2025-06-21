@@ -29,7 +29,6 @@ mcp-voice-agent/
 │   ├── finance-mcp/                # Financial data and analysis tools
 │   │   ├── src/
 │   │   │   ├── index.ts            # MCP server implementation
-│   │   │   ├── http-server.ts      # Direct HTTP API server (read-only)
 │   │   │   ├── MonarchSync.ts      # Monarch Money data import
 │   │   │   ├── analysis/           # Financial analysis modules
 │   │   │   └── importers/          # Data import utilities (CSV, Amazon, etc.)
@@ -37,7 +36,7 @@ mcp-voice-agent/
 │   └── dev-tools-mcp/              # Development and project management tools
 │       ├── src/
 │       │   ├── index.ts            # MCP server implementation
-│       │   └── http-server.ts      # HTTP API server for projects
+│       │   └── utils/              # Database utilities
 │       └── package.json
 ├── data/
 │   ├── finance.db                  # SQLite database with financial data  
@@ -106,7 +105,6 @@ The application uses a **single Docker container** with PM2 process management f
 
 ### Finance MCP Server
 - **MCP Tools**: SQL queries, schema inspection, financial analysis via MCP protocol
-- **HTTP API Server**: Direct REST API access with read-only database security
 - **Monarch Money Integration**: Live financial data import and sync
 - **Amazon Import**: Import Amazon order history, returns, and rentals from CSV exports
 - **Database Queries**: Secure SQL query execution with write protection
@@ -115,11 +113,10 @@ The application uses a **single Docker container** with PM2 process management f
 - **Account Management**: Balance and transaction analysis
 
 ### Dev Tools MCP Server
-- **Project Management**: Create, list, enter, and delete projects
+- **Project Management**: Create, list, enter, and delete projects via MCP protocol
 - **Project State**: Track current active project across sessions
 - **SQLite Storage**: Persistent project data with timestamps
-- **RESTful API**: Direct HTTP access for project operations
-- **MCP Integration**: Project tools available via MCP protocol
+- **Tool Integration**: All project operations available through voice agent
 
 ## New Features ✨
 
@@ -178,7 +175,7 @@ await bridge.executeMCPTool(toolName, args);
 
 **Available Tools via Bridge:**
 - **Finance Tools (7)**: Amazon transactions, house affordability, retirement planning, etc.
-- **Dev Tools (5)**: Project management, HTTP servers, database queries, etc.
+- **Dev Tools (5)**: Project management, database operations, project state tracking, etc.
 - **Real-time Execution**: All tools callable during voice conversations
 - **Argument Validation**: Proper JSON parsing and validation for tool parameters
 
@@ -324,12 +321,12 @@ Both configurations provide:
 2. **MCP Servers** - On-demand processes spawned via STDIO
    - **Finance MCP**: Financial analysis tools (spawned by voice agent)
    - **Dev Tools MCP**: Project management tools (spawned by voice agent)
-   - **No HTTP servers**: Direct STDIO communication for security and efficiency
+   - **STDIO Communication**: Secure, efficient inter-process communication
 
 **Benefits:**
 - **Clear Separation**: Development vs GPU deployment paths
 - **Fast Development**: No unnecessary GPU packages for dev work
-- **Reduced Attack Surface**: No internal HTTP servers
+- **Simplified Architecture**: Single communication protocol (STDIO MCP)
 - **STDIO Security**: MCP communication via secure channels
 
 #### Development (macOS/Windows/Linux) 🖥️

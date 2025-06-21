@@ -58,7 +58,7 @@ class TaxAwareRetirementCalculator {
   ]);
 
   constructor() {
-    // Use consistent database path with http-server.js
+    // Use consistent database path
     const dbPath = path.join(process.cwd(), '..', '..', 'data', 'finance.db');
     this.db = new sqlite3.Database(dbPath);
   }

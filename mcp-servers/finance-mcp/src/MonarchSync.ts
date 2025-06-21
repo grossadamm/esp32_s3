@@ -233,7 +233,7 @@ class FinanceMonarchSync {
   private monarch: MonarchAPI;
 
   constructor() {
-    // Update database path for monorepo structure - match http-server.ts path
+    // Update database path for monorepo structure
     const dbPath = path.join(process.cwd(), '..', '..', 'data', 'finance.db');
     this.db = new DatabaseWrapper(dbPath);
     this.monarch = new MonarchAPI();

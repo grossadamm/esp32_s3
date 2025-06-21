@@ -387,6 +387,14 @@ ANTHROPIC_API_KEY=your_anthropic_api_key_here
 # Optional - Monarch Money sync
 MONARCH_TOKEN=your_monarch_token_here
 
+# Required for stock analysis (currently hardcoded)
+# ⚠️  WARNING: Alpha Vantage key is currently hardcoded in source
+# ALPHA_VANTAGE_API_KEY=your_alpha_vantage_key_here
+
+# Optional - Company-specific configuration (currently hardcoded to Netflix)
+# COMPANY_SYMBOL=NFLX
+# OPTION_GRANT_START_DATE=2016-10-01
+
 # Server configuration (all services use port 3000 internally)
 PORT=3000
 ```
@@ -1237,6 +1245,71 @@ docker stats
 
 # Voice agent process monitoring
 docker compose exec voice-agent pm2 monit
+```
+
+## Configuration & Limitations
+
+### Hardcoded Values & Company-Specific Implementation
+
+**⚠️ Important**: This voice agent was built around a specific Netflix employee's financial portfolio and contains several hardcoded values that make it company-specific rather than generalizable.
+
+#### **API Keys (Security Risk)**
+- **Alpha Vantage API Key**: `H7NU47N5NIPL94NY` is hardcoded in 3 files
+- **Location**: `mcp-servers/finance-mcp/src/index.ts`, `opportunity-cost-analysis.ts`, `stock-price-import.ts`
+- **Risk**: Free tier key shared across users, rate limits, exposed in source code
+- **Solution**: Move to environment variable `ALPHA_VANTAGE_API_KEY`
+
+#### **Netflix-Specific Stock Analysis**
+- **Stock Symbol**: Hardcoded to `NFLX` (Netflix) across all analysis tools
+- **Reason**: Built for Netflix employee stock options portfolio
+- **Impact**: All stock analysis, option valuations, and opportunity cost calculations are Netflix-specific
+
+#### **Hardcoded Date Ranges**
+- **Option Grant Start Date**: `2016-10-01`
+  - **Reason**: Date of first Netflix stock option grants for the original user
+  - **Usage**: Used as analysis start date for stock price imports and opportunity cost calculations
+  - **Location**: `stock-price-import.ts`, `opportunity-cost-analysis.ts`
+  
+- **Analysis End Date**: `2025-06-16`
+  - **Reason**: "Latest data" date when the analysis was written
+  - **Usage**: End point for opportunity cost analysis calculations
+  - **Location**: `opportunity-cost-analysis.ts`
+  - **Issue**: Future date that should be dynamic (current date)
+
+#### **Legacy CSV Import References**
+The following CSV files are referenced in import code but are no longer needed:
+- **`nflx_sample_data.csv`**: Legacy Netflix stock data import (replaced by Alpha Vantage API)
+- **`transactions.csv`**: Historical transaction data (now imported into SQLite database)  
+- **`ByBenefitType_expanded.csv`**: Historical stock options data (now imported into SQLite database)
+
+These were one-time bootstrap files used to populate the initial database. The data now lives in `data/finance.db` and ongoing updates come from live integrations (Monarch Money API, Alpha Vantage API).
+
+#### **Real Data Sources**
+- **✅ Financial Database**: Contains real transaction data (9.8MB)
+- **✅ Amazon Import**: Processes actual Amazon order history exports
+- **✅ Monarch Money**: Pulls live financial data via API
+- **✅ Audio Processing**: Uses real OpenAI Whisper API (no mock data)
+
+### Making It Generalizable
+
+To adapt this for other companies/users:
+
+1. **Move API keys to environment variables**:
+```env
+ALPHA_VANTAGE_API_KEY=your_key_here
+COMPANY_SYMBOL=AAPL  # Or your company's stock symbol
+OPTION_GRANT_START_DATE=2020-01-01  # Your first option grant
+```
+
+2. **Replace hardcoded dates** with dynamic calculations:
+```typescript
+const endDate = new Date().toISOString().split('T')[0]; // Today
+const startDate = process.env.OPTION_GRANT_START_DATE || '2020-01-01';
+```
+
+3. **Update stock analysis** to use configurable symbol:
+```typescript
+const symbol = process.env.COMPANY_SYMBOL || 'SPY'; // Default to S&P 500
 ```
 
 ## Recent Updates ✨

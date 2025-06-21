@@ -272,7 +272,20 @@
                 // 🧠 INITIALIZE VAD
                 await initializeVAD();
                 
-                ws = new WebSocket('ws://localhost:3000/api/audio/realtime');
+                // Dynamic WebSocket URL construction (same as mobile UI)
+                const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+                const wsUrl = `${protocol}//${window.location.host}/api/audio/realtime`;
+                
+                // Debug WebSocket URL construction
+                console.log('🔍 WebSocket URL Debug:', {
+                    'window.location.protocol': window.location.protocol,
+                    'window.location.host': window.location.host,
+                    'protocol': protocol,
+                    'wsUrl': wsUrl
+                });
+                log(`🔗 Connecting to: ${wsUrl}`);
+                
+                ws = new WebSocket(wsUrl);
                 
                 ws.onopen = () => {
                     log('✅ Connected to WebSocket');

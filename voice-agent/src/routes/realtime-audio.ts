@@ -76,7 +76,9 @@ export class RealtimeAudioService {
               type: 'server_vad',
               threshold: 0.5,
               prefix_padding_ms: 300,
-              silence_duration_ms: 600  // Slightly longer for thoughtful responses
+              silence_duration_ms: 200,  // Faster response for better conversation flow
+              create_response: true,     // Auto-create response when speech ends
+              interrupt_response: true   // Allow interruptions
             }
           }
         };
@@ -97,7 +99,9 @@ export class RealtimeAudioService {
               type: 'server_vad',
               threshold: 0.5,
               prefix_padding_ms: 300,
-              silence_duration_ms: 600
+              silence_duration_ms: 200,
+              create_response: true,
+              interrupt_response: true
             }
           }
         };
@@ -113,6 +117,11 @@ export class RealtimeAudioService {
         // Log important events for debugging
         if (['session.created', 'response.function_call_arguments.done', 'error'].includes(event.type)) {
           console.log('OpenAI Realtime Event:', JSON.stringify(event, null, 2));
+        }
+        
+        // Log speech detection and response events
+        if (['input_audio_buffer.speech_started', 'input_audio_buffer.speech_stopped', 'response.created', 'response.done'].includes(event.type)) {
+          console.log(`🎤 OpenAI Event: ${event.type}`);
         }
         
         switch (event.type) {
@@ -172,19 +181,29 @@ export class RealtimeAudioService {
         const message = JSON.parse(data.toString());
         
         if (message.type === 'audio_chunk') {
+          console.log(`📤 Received audio chunk from client: ${message.audio.length} chars`);
+          
           // Forward audio to OpenAI
           realtimeWs.send(JSON.stringify({
             type: 'input_audio_buffer.append',
             audio: message.audio
           }));
+          
+          console.log(`➡️ Forwarded audio chunk to OpenAI`);
+        } else {
+          console.log(`📨 Received message type: ${message.type}`);
         }
       } catch (error: any) {
+        console.log(`📤 Received raw audio data: ${data.length} bytes`);
+        
         // Assume raw audio data if not JSON
         const audioBase64 = data.toString('base64');
         realtimeWs.send(JSON.stringify({
           type: 'input_audio_buffer.append',
           audio: audioBase64
         }));
+        
+        console.log(`➡️ Forwarded raw audio to OpenAI`);
       }
     });
 

@@ -328,9 +328,16 @@
                     pcmData[i] = Math.max(-32768, Math.min(32767, audioFloat32Array[i] * 32767));
                 }
                 
-                // Convert to base64
+                // Convert to base64 efficiently (avoid stack overflow with large arrays)
                 const uint8Array = new Uint8Array(pcmData.buffer);
-                const base64Audio = btoa(String.fromCharCode.apply(null, uint8Array));
+                let base64Audio = '';
+                
+                // Process in chunks to avoid "Maximum call stack size exceeded"
+                const chunkSize = 8192; // Process 8KB at a time
+                for (let i = 0; i < uint8Array.length; i += chunkSize) {
+                    const chunk = uint8Array.slice(i, i + chunkSize);
+                    base64Audio += btoa(String.fromCharCode.apply(null, chunk));
+                }
                 
                 // Send to server
                 ws.send(JSON.stringify({
@@ -385,6 +392,14 @@
             
             const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
             const wsUrl = `${protocol}//${window.location.host}/api/audio/realtime`;
+            
+            // Debug WebSocket URL construction
+            console.log('🔍 WebSocket URL Debug:', {
+                'window.location.protocol': window.location.protocol,
+                'window.location.host': window.location.host,
+                'protocol': protocol,
+                'wsUrl': wsUrl
+            });
             
             ws = new WebSocket(wsUrl);
             
@@ -496,35 +511,78 @@
 
         // Initialize audio context (requires user interaction on iOS)
         async function initializeAudio() {
+            const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+            
+            if (isMobile) {
+                console.log('📱 Mobile device detected - using simplified audio setup');
+                // On mobile, we'll primarily use Audio elements, but still create AudioContext for compatibility
+                if (!audioContext) {
+                    try {
+                        audioContext = new (window.AudioContext || window.webkitAudioContext)({
+                            sampleRate: 24000
+                        });
+                        console.log('📱 Mobile audio context created (fallback):', audioContext.state);
+                    } catch (error) {
+                        console.log('📱 AudioContext not available on mobile, using Audio elements only');
+                        return true; // We can still use Audio elements
+                    }
+                }
+                
+                // Try to resume if suspended
+                if (audioContext && audioContext.state === 'suspended') {
+                    try {
+                        await audioContext.resume();
+                        console.log('📱 Mobile audio context resumed');
+                    } catch (error) {
+                        console.log('📱 Could not resume mobile audio context, using Audio elements');
+                    }
+                }
+                
+                return true; // Mobile can work with Audio elements even without AudioContext
+            }
+            
+            // Desktop audio context initialization
             if (!audioContext) {
                 try {
                     audioContext = new (window.AudioContext || window.webkitAudioContext)({
-                        sampleRate: 24000  // Match OpenAI's output
+                        sampleRate: 24000
                     });
-                    console.log('Audio context initialized:', audioContext.state);
+                    console.log('🖥️ Desktop audio context created:', audioContext.state);
                     
-                    // Resume audio context if suspended (iOS requirement)
                     if (audioContext.state === 'suspended') {
                         await audioContext.resume();
-                        console.log('Audio context resumed');
+                        console.log('▶️ Desktop audio context resumed');
                     }
+                    
+                    // Prime audio system
+                    try {
+                        const buffer = audioContext.createBuffer(1, 1, audioContext.sampleRate);
+                        const source = audioContext.createBufferSource();
+                        source.buffer = buffer;
+                        source.connect(audioContext.destination);
+                        source.start();
+                        console.log('🔇 Desktop audio system primed');
+                    } catch (primeError) {
+                        console.warn('⚠️ Could not prime desktop audio system:', primeError);
+                    }
+                    
                     return true;
                 } catch (error) {
-                    console.error('Failed to initialize audio context:', error);
+                    console.error('❌ Failed to initialize desktop audio context:', error);
                     return false;
                 }
             } else {
-                // Always try to resume on user interaction
-                if (audioContext.state === 'suspended') {
+                if (audioContext.state !== 'running') {
                     try {
                         await audioContext.resume();
-                        console.log('Audio context resumed on user interaction');
+                        console.log('▶️ Desktop audio context resumed, status:', audioContext.state);
                     } catch (error) {
-                        console.error('Failed to resume audio context:', error);
+                        console.error('❌ Failed to resume desktop audio context:', error);
                     }
                 }
             }
-            return true;
+            
+            return audioContext ? audioContext.state === 'running' : false;
         }
 
         async function playAudioChunk(base64Audio) {
@@ -532,7 +590,7 @@
             
             try {
                 if (!audioContext) {
-                    console.error('Audio context not initialized');
+                    console.log('⚠️ Audio context not initialized, skipping playback');
                     updateStatus('🔊 Audio received (no context)', 'connected');
                     return;
                 }
@@ -540,12 +598,22 @@
                 // Resume audio context if suspended (iOS requirement)
                 if (audioContext.state === 'suspended') {
                     console.log('Resuming audio context...');
-                    await audioContext.resume();
+                    try {
+                        await audioContext.resume();
+                        console.log('✅ Audio context resumed');
+                    } catch (resumeError) {
+                        console.warn('❌ Failed to resume audio context:', resumeError);
+                        updateStatus('🔊 Audio received (context suspended)', 'connected');
+                        return;
+                    }
                 }
 
                 // Convert base64 to AudioBuffer
                 const audioBuffer = await decodeAudioChunk(base64Audio);
-                if (!audioBuffer) return;
+                if (!audioBuffer) {
+                    console.log('⚠️ Skipping audio chunk (decode failed)');
+                    return;
+                }
 
                 // Add to queue for seamless playback
                 audioQueue.push(audioBuffer);
@@ -563,6 +631,41 @@
             }
         }
 
+        // Convert PCM16 to WAV format for better mobile compatibility
+        function pcm16ToWav(pcmData, sampleRate) {
+            const length = pcmData.length;
+            const arrayBuffer = new ArrayBuffer(44 + length * 2);
+            const view = new DataView(arrayBuffer);
+            
+            // WAV header
+            const writeString = (offset, string) => {
+                for (let i = 0; i < string.length; i++) {
+                    view.setUint8(offset + i, string.charCodeAt(i));
+                }
+            };
+            
+            writeString(0, 'RIFF');
+            view.setUint32(4, 36 + length * 2, true);
+            writeString(8, 'WAVE');
+            writeString(12, 'fmt ');
+            view.setUint32(16, 16, true);
+            view.setUint16(20, 1, true);
+            view.setUint16(22, 1, true);
+            view.setUint32(24, sampleRate, true);
+            view.setUint32(28, sampleRate * 2, true);
+            view.setUint16(32, 2, true);
+            view.setUint16(34, 16, true);
+            writeString(36, 'data');
+            view.setUint32(40, length * 2, true);
+            
+            // PCM data
+            for (let i = 0; i < length; i++) {
+                view.setInt16(44 + i * 2, pcmData[i], true);
+            }
+            
+            return arrayBuffer;
+        }
+
         async function decodeAudioChunk(base64Audio) {
             try {
                 // Decode base64 to binary (raw PCM16 data from OpenAI)
@@ -574,8 +677,7 @@
                     uint8Array[i] = binaryString.charCodeAt(i);
                 }
 
-                // Convert raw PCM16 data to AudioBuffer manually
-                // OpenAI sends PCM16 at 24kHz mono
+                // Convert raw PCM16 data
                 const pcmData = new Int16Array(arrayBuffer);
                 const sampleRate = 24000;
                 const numSamples = pcmData.length;
@@ -583,21 +685,90 @@
                 
                 console.log(`Audio chunk: ${numSamples} samples, ${duration.toFixed(3)}s duration`);
                 
-                // Create AudioBuffer manually
-                const audioBuffer = audioContext.createBuffer(1, numSamples, sampleRate);
-                const channelData = audioBuffer.getChannelData(0);
+                // On mobile, try different approaches
+                const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
                 
-                // Convert Int16 PCM to Float32 audio data
-                for (let i = 0; i < numSamples; i++) {
-                    channelData[i] = pcmData[i] / 32768.0; // Convert from -32768,32767 to -1,1
+                if (isMobile) {
+                    // For mobile: convert to WAV and use Audio element
+                    console.log('📱 Using mobile-friendly audio playback');
+                    const wavBuffer = pcm16ToWav(pcmData, sampleRate);
+                    const blob = new Blob([wavBuffer], { type: 'audio/wav' });
+                    const audioUrl = URL.createObjectURL(blob);
+                    
+                    return { type: 'mobile', url: audioUrl, duration };
+                } else {
+                    // For desktop: use Web Audio API
+                    try {
+                        const audioBuffer = audioContext.createBuffer(1, numSamples, sampleRate);
+                        const channelData = audioBuffer.getChannelData(0);
+                        
+                        // Convert Int16 PCM to Float32 audio data
+                        for (let i = 0; i < numSamples; i++) {
+                            channelData[i] = pcmData[i] / 32768.0;
+                        }
+                        
+                        return { type: 'webaudio', buffer: audioBuffer, duration };
+                    } catch (bufferError) {
+                        console.warn('Web Audio API failed, falling back to mobile approach:', bufferError);
+                        const wavBuffer = pcm16ToWav(pcmData, sampleRate);
+                        const blob = new Blob([wavBuffer], { type: 'audio/wav' });
+                        const audioUrl = URL.createObjectURL(blob);
+                        
+                        return { type: 'mobile', url: audioUrl, duration };
+                    }
                 }
-                
-                return audioBuffer;
                 
             } catch (error) {
                 console.error('Error decoding audio chunk:', error);
                 return null;
             }
+        }
+
+        // Mobile-friendly audio playback queue
+        let mobileAudioQueue = [];
+        let isMobilePlaybackActive = false;
+
+        function processMobileAudioQueue() {
+            if (isMobilePlaybackActive || mobileAudioQueue.length === 0) {
+                return;
+            }
+            
+            isMobilePlaybackActive = true;
+            console.log(`📱 Processing mobile audio queue: ${mobileAudioQueue.length} chunks`);
+            
+            const playNext = () => {
+                if (mobileAudioQueue.length === 0) {
+                    isMobilePlaybackActive = false;
+                    isPlayingAudio = false;
+                    updateStatus('Connected', 'connected');
+                    console.log('📱 Mobile audio queue completed');
+                    return;
+                }
+                
+                const audioUrl = mobileAudioQueue.shift();
+                const audio = new Audio(audioUrl);
+                
+                // iPhone Safari requires user gesture - but we should have it from button press
+                audio.play().then(() => {
+                    console.log('📱 Playing mobile audio chunk');
+                }).catch(error => {
+                    console.warn('📱 Mobile audio play failed:', error);
+                    playNext(); // Continue to next chunk
+                });
+                
+                audio.onended = () => {
+                    URL.revokeObjectURL(audioUrl); // Clean up memory
+                    playNext();
+                };
+                
+                audio.onerror = () => {
+                    console.warn('📱 Mobile audio error, skipping chunk');
+                    URL.revokeObjectURL(audioUrl);
+                    playNext();
+                };
+            };
+            
+            playNext();
         }
 
         function processAudioQueue() {
@@ -608,34 +779,44 @@
             isProcessingQueue = true;
             isPlayingAudio = true;
             
-            // Initialize start time if this is the first chunk
-            if (nextStartTime === 0) {
-                nextStartTime = audioContext.currentTime + 0.1; // Small delay to prevent clicks
+            console.log(`🖥️ Processing Web Audio queue: ${audioQueue.length} chunks`);
+            
+            // Check if we have mobile audio chunks
+            const firstItem = audioQueue[0];
+            if (firstItem && firstItem.type === 'mobile') {
+                // Convert to mobile queue and process differently
+                while (audioQueue.length > 0) {
+                    const item = audioQueue.shift();
+                    if (item.type === 'mobile') {
+                        mobileAudioQueue.push(item.url);
+                    }
+                }
+                isProcessingQueue = false;
+                processMobileAudioQueue();
+                return;
             }
             
-            console.log(`Processing audio queue: ${audioQueue.length} chunks`);
+            // Web Audio API processing for desktop
+            if (nextStartTime === 0) {
+                nextStartTime = audioContext.currentTime + 0.1;
+            }
             
-            // Process all queued chunks
             while (audioQueue.length > 0) {
-                const audioBuffer = audioQueue.shift();
+                const audioData = audioQueue.shift();
+                const audioBuffer = audioData.type === 'webaudio' ? audioData.buffer : audioData;
                 
-                // Create buffer source
                 const source = audioContext.createBufferSource();
                 source.buffer = audioBuffer;
                 source.connect(audioContext.destination);
                 
-                // Schedule to play at the exact time the previous chunk ends
                 source.start(nextStartTime);
-                
-                // Update next start time for seamless playback
                 nextStartTime += audioBuffer.duration;
                 
-                console.log(`Scheduled chunk at ${nextStartTime - audioBuffer.duration}s, duration: ${audioBuffer.duration.toFixed(3)}s`);
+                console.log(`🖥️ Scheduled Web Audio chunk, duration: ${audioBuffer.duration.toFixed(3)}s`);
                 
-                // Handle the last chunk ending
                 if (audioQueue.length === 0) {
                     source.onended = () => {
-                        console.log('Audio queue playback completed');
+                        console.log('🖥️ Web Audio queue completed');
                         isProcessingQueue = false;
                         isPlayingAudio = false;
                         nextStartTime = 0;
@@ -646,11 +827,16 @@
         }
 
         function stopAllAudio() {
-            // Clear the queue and reset state
+            // Clear desktop audio queue and reset state
             audioQueue = [];
             isProcessingQueue = false;
             isPlayingAudio = false;
             nextStartTime = 0;
+            
+            // Clear mobile audio queue  
+            mobileAudioQueue.forEach(url => URL.revokeObjectURL(url));
+            mobileAudioQueue = [];
+            isMobilePlaybackActive = false;
             
             // Stop current audio source if exists
             if (currentAudioSource) {
@@ -664,7 +850,7 @@
                 }
             }
             
-            console.log('Stopped all audio and cleared queue');
+            console.log('🛑 Stopped all audio and cleared queues (mobile + desktop)');
         }
 
         async function checkMicrophonePermission() {

@@ -589,7 +589,7 @@ We use a **hybrid deployment strategy** that combines the best of both worlds:
 **Daily Development Cycle:**
 1. **Edit code** on Mac (VS Code, full IDE support)
 2. **Deploy changes** from Mac: `./scripts/jetson-deploy-fast.sh` (30 seconds)
-3. **Test immediately**: Voice agent available at http://jetson:3000
+3. **Test immediately**: Voice agent available at https://192.168.1.108
 4. **Monitor/debug**: SSH to Jetson for monitoring scripts
 
 **When to Re-run Setup:**
@@ -634,7 +634,7 @@ cp .env.example .env  # Configure API keys
 # Expected output:
 # 🚀 Fast Jetson deployment (~30 seconds)
 # ✅ Deployment complete in 25 seconds!
-# 🌐 Voice agent: http://192.168.1.108:3000
+# 🌐 Voice agent: https://192.168.1.108
 ```
 
 ### 📊 Performance Analysis

@@ -223,7 +223,7 @@
             }
         }
 
-        // Helper function to send audio data to server
+        // Helper function to send audio data to server (with stack overflow fix)
         function sendAudioToServer(audioFloat32Array) {
             try {
                 // Convert Float32Array to PCM16 for OpenAI compatibility
@@ -232,9 +232,16 @@
                     pcmData[i] = Math.max(-32768, Math.min(32767, audioFloat32Array[i] * 32767));
                 }
                 
-                // Convert to base64
+                // Convert to base64 efficiently (avoid stack overflow with large arrays)
                 const uint8Array = new Uint8Array(pcmData.buffer);
-                const base64Audio = btoa(String.fromCharCode.apply(null, uint8Array));
+                let base64Audio = '';
+                
+                // Process in chunks to avoid "Maximum call stack size exceeded"
+                const chunkSize = 8192; // Process 8KB at a time
+                for (let i = 0; i < uint8Array.length; i += chunkSize) {
+                    const chunk = uint8Array.slice(i, i + chunkSize);
+                    base64Audio += btoa(String.fromCharCode.apply(null, chunk));
+                }
                 
                 // Send to server
                 ws.send(JSON.stringify({
@@ -412,36 +419,116 @@
             transcriptDiv.scrollTop = transcriptDiv.scrollHeight;
         }
         
-        function playAudioChunk(base64Audio) {
-            if (!audioContextReady || !audioKeepAlive.audioContext) {
-                log('⚠️ AudioContext not ready, audio playback skipped');
-                return;
+        // 📱 Mobile-friendly audio playback with PCM16 to WAV conversion
+        function pcm16ToWav(pcmData, sampleRate) {
+            const length = pcmData.length;
+            const arrayBuffer = new ArrayBuffer(44 + length * 2);
+            const view = new DataView(arrayBuffer);
+            
+            // WAV header
+            const writeString = (offset, string) => {
+                for (let i = 0; i < string.length; i++) {
+                    view.setUint8(offset + i, string.charCodeAt(i));
+                }
+            };
+            
+            writeString(0, 'RIFF');
+            view.setUint32(4, 36 + length * 2, true);
+            writeString(8, 'WAVE');
+            writeString(12, 'fmt ');
+            view.setUint32(16, 16, true);
+            view.setUint16(20, 1, true);
+            view.setUint16(22, 1, true);
+            view.setUint32(24, sampleRate, true);
+            view.setUint32(28, sampleRate * 2, true);
+            view.setUint16(32, 2, true);
+            view.setUint16(34, 16, true);
+            writeString(36, 'data');
+            view.setUint32(40, length * 2, true);
+            
+            // PCM data
+            for (let i = 0; i < length; i++) {
+                view.setInt16(44 + i * 2, pcmData[i], true);
             }
             
+            return arrayBuffer;
+        }
+
+        function playAudioChunk(base64Audio) {
+            const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+            
             try {
-                // 🎯 PROPER AUDIO PLAYBACK USING WEB AUDIO API
-                const audioData = atob(base64Audio);
-                const arrayBuffer = new ArrayBuffer(audioData.length);
-                const view = new Uint8Array(arrayBuffer);
-                for (let i = 0; i < audioData.length; i++) {
-                    view[i] = audioData.charCodeAt(i);
-                }
+                // Decode base64 to PCM16 data from OpenAI
+                const binaryString = atob(base64Audio);
+                const arrayBuffer = new ArrayBuffer(binaryString.length);
+                const uint8Array = new Uint8Array(arrayBuffer);
                 
-                // Decode audio data and play through AudioContext
-                audioKeepAlive.audioContext.decodeAudioData(arrayBuffer.slice()).then(audioBuffer => {
-                    const source = audioKeepAlive.audioContext.createBufferSource();
-                    source.buffer = audioBuffer;
-                    source.connect(audioKeepAlive.audioContext.destination);
-                    source.start();
-                    log(`🔊 Playing audio chunk (${audioBuffer.duration.toFixed(2)}s)`);
-                }).catch(error => {
-                    // Fallback to regular audio element if decoding fails
-                    log(`⚠️ AudioContext decode failed, using fallback: ${error.message}`);
-                    const audio = new Audio('data:audio/wav;base64,' + base64Audio);
-                    audio.play().catch(err => {
-                        log(`❌ Fallback audio failed: ${err.message}`);
+                for (let i = 0; i < binaryString.length; i++) {
+                    uint8Array[i] = binaryString.charCodeAt(i);
+                }
+
+                const pcmData = new Int16Array(arrayBuffer);
+                const sampleRate = 24000;
+                const duration = pcmData.length / sampleRate;
+                
+                log(`🔊 Audio chunk: ${pcmData.length} samples, ${duration.toFixed(3)}s`);
+                
+                if (isMobile) {
+                    // 📱 Mobile: Convert PCM16 to WAV and use Audio element
+                    log('📱 Using mobile-friendly audio playback');
+                    const wavBuffer = pcm16ToWav(pcmData, sampleRate);
+                    const blob = new Blob([wavBuffer], { type: 'audio/wav' });
+                    const audioUrl = URL.createObjectURL(blob);
+                    
+                    const audio = new Audio(audioUrl);
+                    audio.play().then(() => {
+                        log('📱 Playing mobile audio chunk');
+                    }).catch(error => {
+                        log(`📱 Mobile audio play failed: ${error.message}`);
                     });
-                });
+                    
+                    audio.onended = () => {
+                        URL.revokeObjectURL(audioUrl); // Clean up memory
+                    };
+                    
+                    audio.onerror = () => {
+                        log('📱 Mobile audio error');
+                        URL.revokeObjectURL(audioUrl);
+                    };
+                    
+                } else {
+                    // 🖥️ Desktop: Use Web Audio API
+                    if (!audioContextReady || !audioKeepAlive.audioContext) {
+                        log('⚠️ AudioContext not ready, skipping desktop audio');
+                        return;
+                    }
+                    
+                    try {
+                        const audioBuffer = audioKeepAlive.audioContext.createBuffer(1, pcmData.length, sampleRate);
+                        const channelData = audioBuffer.getChannelData(0);
+                        
+                        // Convert Int16 PCM to Float32 audio data
+                        for (let i = 0; i < pcmData.length; i++) {
+                            channelData[i] = pcmData[i] / 32768.0;
+                        }
+                        
+                        const source = audioKeepAlive.audioContext.createBufferSource();
+                        source.buffer = audioBuffer;
+                        source.connect(audioKeepAlive.audioContext.destination);
+                        source.start();
+                        log(`🖥️ Playing Web Audio chunk (${duration.toFixed(2)}s)`);
+                        
+                    } catch (webAudioError) {
+                        log(`⚠️ Web Audio failed, using fallback: ${webAudioError.message}`);
+                        // Fallback to mobile approach even on desktop
+                        const wavBuffer = pcm16ToWav(pcmData, sampleRate);
+                        const blob = new Blob([wavBuffer], { type: 'audio/wav' });
+                        const audioUrl = URL.createObjectURL(blob);
+                        const audio = new Audio(audioUrl);
+                        audio.play().catch(err => log(`❌ Fallback audio failed: ${err.message}`));
+                        audio.onended = () => URL.revokeObjectURL(audioUrl);
+                    }
+                }
                 
             } catch (error) {
                 log(`❌ Audio playback error: ${error.message}`);

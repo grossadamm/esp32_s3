@@ -1,0 +1,99 @@
+Command: ninja all
+[1/10] Performing build step for 'bootloader'
+[1/1] cd /workspace/phase1_audio_test/build/bootloader/esp-idf/esptool_py && /home/ubuntu/.espressif/python_env/idf6.0_py3.13_env/bin/python /workspace/esp-idf/components/partition_table/check_sizes.py --offset 0x8000 bootloader 0x0 /workspace/phase1_audio_test/build/bootloader/bootloader.bin
+Bootloader binary size 0x5260 bytes. 0x2da0 bytes (36%) free.
+[2/10] No install step for 'bootloader'
+[3/10] Completed 'bootloader'
+[4/10] Building C object esp-idf/main/CMakeFiles/__idf_main.dir/phase1_audio_test.c.obj
+FAILED: esp-idf/main/CMakeFiles/__idf_main.dir/phase1_audio_test.c.obj 
+/home/ubuntu/.espressif/tools/xtensa-esp-elf/esp-14.2.0_20241119/xtensa-esp-elf/bin/xtensa-esp32s3-elf-gcc -DESP_PLATFORM -DIDF_VER=\"v6.0-dev-774-g68b583f30c\" -DMBEDTLS_CONFIG_FILE=\"mbedtls/esp_config.h\" -DSOC_MMU_PAGE_SIZE=CONFIG_MMU_PAGE_SIZE -DSOC_XTAL_FREQ_MHZ=CONFIG_XTAL_FREQ -DUNITY_INCLUDE_CONFIG_H -D_GLIBCXX_HAVE_POSIX_SEMAPHORE -D_GLIBCXX_USE_POSIX_SEMAPHORE -D_GNU_SOURCE -D_POSIX_READER_WRITER_LOCKS -I/workspace/phase1_audio_test/build/config -I/workspace/phase1_audio_test/main -I/workspace/esp-idf/components/newlib/platform_include -I/workspace/esp-idf/components/freertos/config/include -I/workspace/esp-idf/components/freertos/config/include/freertos -I/workspace/esp-idf/components/freertos/config/xtensa/include -I/workspace/esp-idf/components/freertos/FreeRTOS-Kernel/include -I/workspace/esp-idf/components/freertos/FreeRTOS-Kernel/portable/xtensa/include -I/workspace/esp-idf/components/freertos/FreeRTOS-Kernel/portable/xtensa/include/freertos -I/workspace/esp-idf/components/freertos/esp_additions/include -I/workspace/esp-idf/components/esp_hw_support/include -I/workspace/esp-idf/components/esp_hw_support/include/soc -I/workspace/esp-idf/components/esp_hw_support/include/soc/esp32s3 -I/workspace/esp-idf/components/esp_hw_support/dma/include -I/workspace/esp-idf/components/esp_hw_support/ldo/include -I/workspace/esp-idf/components/esp_hw_support/debug_probe/include -I/workspace/esp-idf/components/esp_hw_support/mspi_timing_tuning/include -I/workspace/esp-idf/components/esp_hw_support/mspi_timing_tuning/tuning_scheme_impl/include -I/workspace/esp-idf/components/esp_hw_support/power_supply/include -I/workspace/esp-idf/components/esp_hw_support/port/esp32s3/. -I/workspace/esp-idf/components/esp_hw_support/port/esp32s3/include -I/workspace/esp-idf/components/esp_hw_support/mspi_timing_tuning/port/esp32s3/. -I/workspace/esp-idf/components/esp_hw_support/mspi_timing_tuning/port/esp32s3/include -I/workspace/esp-idf/components/heap/include -I/workspace/esp-idf/components/heap/tlsf -I/workspace/esp-idf/components/log/include -I/workspace/esp-idf/components/soc/include -I/workspace/esp-idf/components/soc/esp32s3 -I/workspace/esp-idf/components/soc/esp32s3/include -I/workspace/esp-idf/components/soc/esp32s3/register -I/workspace/esp-idf/components/hal/platform_port/include -I/workspace/esp-idf/components/hal/esp32s3/include -I/workspace/esp-idf/components/hal/include -I/workspace/esp-idf/components/esp_rom/include -I/workspace/esp-idf/components/esp_rom/esp32s3/include -I/workspace/esp-idf/components/esp_rom/esp32s3/include/esp32s3 -I/workspace/esp-idf/components/esp_rom/esp32s3 -I/workspace/esp-idf/components/esp_common/include -I/workspace/esp-idf/components/esp_system/include -I/workspace/esp-idf/components/esp_system/port/soc -I/workspace/esp-idf/components/esp_system/port/include/private -I/workspace/esp-idf/components/xtensa/esp32s3/include -I/workspace/esp-idf/components/xtensa/include -I/workspace/esp-idf/components/xtensa/deprecated_include -I/workspace/esp-idf/components/lwip/include -I/workspace/esp-idf/components/lwip/include/apps -I/workspace/esp-idf/components/lwip/include/apps/sntp -I/workspace/esp-idf/components/lwip/lwip/src/include -I/workspace/esp-idf/components/lwip/port/include -I/workspace/esp-idf/components/lwip/port/freertos/include -I/workspace/esp-idf/components/lwip/port/esp32xx/include -I/workspace/esp-idf/components/lwip/port/esp32xx/include/arch -I/workspace/esp-idf/components/lwip/port/esp32xx/include/sys -I/workspace/esp-idf/components/esp_driver_gpio/include -I/workspace/esp-idf/components/esp_pm/include -I/workspace/esp-idf/components/mbedtls/port/include -I/workspace/esp-idf/components/mbedtls/mbedtls/include -I/workspace/esp-idf/components/mbedtls/mbedtls/library -I/workspace/esp-idf/components/mbedtls/esp_crt_bundle/include -I/workspace/esp-idf/components/mbedtls/mbedtls/3rdparty/everest/include -I/workspace/esp-idf/components/mbedtls/mbedtls/3rdparty/p256-m -I/workspace/esp-idf/components/mbedtls/mbedtls/3rdparty/p256-m/p256-m -I/workspace/esp-idf/components/esp_app_format/include -I/workspace/esp-idf/components/esp_bootloader_format/include -I/workspace/esp-idf/components/app_update/include -I/workspace/esp-idf/components/bootloader_support/include -I/workspace/esp-idf/components/bootloader_support/bootloader_flash/include -I/workspace/esp-idf/components/esp_partition/include -I/workspace/esp-idf/components/efuse/include -I/workspace/esp-idf/components/efuse/esp32s3/include -I/workspace/esp-idf/components/esp_mm/include -I/workspace/esp-idf/components/spi_flash/include -I/workspace/esp-idf/components/esp_security/include -I/workspace/esp-idf/components/pthread/include -I/workspace/esp-idf/components/esp_timer/include -I/workspace/esp-idf/components/esp_driver_gptimer/include -I/workspace/esp-idf/components/esp_ringbuf/include -I/workspace/esp-idf/components/esp_driver_uart/include -I/workspace/esp-idf/components/vfs/include -I/workspace/esp-idf/components/app_trace/include -I/workspace/esp-idf/components/esp_event/include -I/workspace/esp-idf/components/nvs_flash/include -I/workspace/esp-idf/components/esp_phy/include -I/workspace/esp-idf/components/esp_phy/esp32s3/include -I/workspace/esp-idf/components/esp_driver_usb_serial_jtag/include -I/workspace/esp-idf/components/esp_vfs_console/include -I/workspace/esp-idf/components/esp_netif/include -I/workspace/esp-idf/components/wpa_supplicant/include -I/workspace/esp-idf/components/wpa_supplicant/port/include -I/workspace/esp-idf/components/wpa_supplicant/esp_supplicant/include -I/workspace/esp-idf/components/esp_coex/include -I/workspace/esp-idf/components/esp_wifi/include -I/workspace/esp-idf/components/esp_wifi/include/local -I/workspace/esp-idf/components/esp_wifi/wifi_apps/include -I/workspace/esp-idf/components/esp_wifi/wifi_apps/nan_app/include -I/workspace/esp-idf/components/esp_driver_spi/include -I/workspace/esp-idf/components/esp_gdbstub/include -I/workspace/esp-idf/components/unity/include -I/workspace/esp-idf/components/unity/unity/src -I/workspace/esp-idf/components/cmock/CMock/src -I/workspace/esp-idf/components/console -I/workspace/esp-idf/components/esp_driver_pcnt/include -I/workspace/esp-idf/components/esp_driver_mcpwm/include -I/workspace/esp-idf/components/esp_driver_ana_cmpr/include -I/workspace/esp-idf/components/esp_driver_i2s/include -I/workspace/esp-idf/components/sdmmc/include -I/workspace/esp-idf/components/esp_driver_sd_intf/include -I/workspace/esp-idf/components/esp_driver_sdmmc/include -I/workspace/esp-idf/components/esp_driver_sdmmc/legacy/include -I/workspace/esp-idf/components/esp_driver_sdspi/include -I/workspace/esp-idf/components/esp_driver_sdio/include -I/workspace/esp-idf/components/esp_driver_dac/include -I/workspace/esp-idf/components/esp_driver_bitscrambler/include -I/workspace/esp-idf/components/esp_driver_rmt/include -I/workspace/esp-idf/components/esp_driver_tsens/include -I/workspace/esp-idf/components/esp_driver_sdm/include -I/workspace/esp-idf/components/esp_driver_i2c/include -I/workspace/esp-idf/components/esp_driver_ledc/include -I/workspace/esp-idf/components/esp_driver_parlio/include -I/workspace/esp-idf/components/esp_driver_twai/include -I/workspace/esp-idf/components/driver/deprecated -I/workspace/esp-idf/components/driver/i2c/include -I/workspace/esp-idf/components/driver/touch_sensor/include -I/workspace/esp-idf/components/driver/twai/include -I/workspace/esp-idf/components/driver/touch_sensor/esp32s3/include -I/workspace/esp-idf/components/http_parser -I/workspace/esp-idf/components/esp-tls -I/workspace/esp-idf/components/esp-tls/esp-tls-crypto -I/workspace/esp-idf/components/esp_adc/include -I/workspace/esp-idf/components/esp_adc/interface -I/workspace/esp-idf/components/esp_adc/esp32s3/include -I/workspace/esp-idf/components/esp_driver_isp/include -I/workspace/esp-idf/components/esp_driver_cam/include -I/workspace/esp-idf/components/esp_driver_cam/interface -I/workspace/esp-idf/components/esp_psram/include -I/workspace/esp-idf/components/esp_psram/xip_impl/include -I/workspace/esp-idf/components/esp_driver_jpeg/include -I/workspace/esp-idf/components/esp_driver_ppa/include -I/workspace/esp-idf/components/esp_driver_touch_sens/include -I/workspace/esp-idf/components/esp_driver_touch_sens/hw_ver2/include -I/workspace/esp-idf/components/esp_eth/include -I/workspace/esp-idf/components/esp_hid/include -I/workspace/esp-idf/components/tcp_transport/include -I/workspace/esp-idf/components/esp_http_client/include -I/workspace/esp-idf/components/esp_http_server/include -I/workspace/esp-idf/components/esp_https_ota/include -I/workspace/esp-idf/components/esp_https_server/include -I/workspace/esp-idf/components/esp_lcd/include -I/workspace/esp-idf/components/esp_lcd/interface -I/workspace/esp-idf/components/esp_lcd/rgb/include -I/workspace/esp-idf/components/protobuf-c/protobuf-c -I/workspace/esp-idf/components/protocomm/include/common -I/workspace/esp-idf/components/protocomm/include/security -I/workspace/esp-idf/components/protocomm/include/transports -I/workspace/esp-idf/components/protocomm/include/crypto/srp6a -I/workspace/esp-idf/components/protocomm/proto-c -I/workspace/esp-idf/components/esp_local_ctrl/include -I/workspace/esp-idf/components/espcoredump/include -I/workspace/esp-idf/components/espcoredump/include/port/xtensa -I/workspace/esp-idf/components/wear_levelling/include -I/workspace/esp-idf/components/fatfs/diskio -I/workspace/esp-idf/components/fatfs/src -I/workspace/esp-idf/components/fatfs/vfs -I/workspace/esp-idf/components/idf_test/include -I/workspace/esp-idf/components/idf_test/include/esp32s3 -I/workspace/esp-idf/components/ieee802154/include -I/workspace/esp-idf/components/json/cJSON -I/workspace/esp-idf/components/mqtt/esp-mqtt/include -I/workspace/esp-idf/components/nvs_sec_provider/include -I/workspace/esp-idf/components/perfmon/include -I/workspace/esp-idf/components/rt/include -I/workspace/esp-idf/components/spiffs/include -I/workspace/esp-idf/components/touch_element/include -I/workspace/esp-idf/components/usb/include -I/workspace/esp-idf/components/wifi_provisioning/include -mlongcalls  -fno-builtin-memcpy -fno-builtin-memset -fno-builtin-bzero -fno-builtin-stpcpy -fno-builtin-strncpy -fdiagnostics-color=always -ffunction-sections -fdata-sections -Wall -Werror=all -Wno-error=unused-function -Wno-error=unused-variable -Wno-error=unused-but-set-variable -Wno-error=deprecated-declarations -Wextra -Wno-error=extra -Wno-unused-parameter -Wno-sign-compare -Wno-enum-conversion -gdwarf-4 -ggdb -Og -fno-shrink-wrap -fmacro-prefix-map=/workspace/phase1_audio_test=. -fmacro-prefix-map=/workspace/esp-idf=/IDF -fstrict-volatile-bitfields -fno-jump-tables -fno-tree-switch-conversion -std=gnu17 -Wno-old-style-declaration -MD -MT esp-idf/main/CMakeFiles/__idf_main.dir/phase1_audio_test.c.obj -MF esp-idf/main/CMakeFiles/__idf_main.dir/phase1_audio_test.c.obj.d -o esp-idf/main/CMakeFiles/__idf_main.dir/phase1_audio_test.c.obj -c /workspace/phase1_audio_test/main/phase1_audio_test.c
+/workspace/phase1_audio_test/main/phase1_audio_test.c:28:8: error: unknown type name 'dac_continuous_handle_t'; did you mean 'adc_continuous_clk_src_t'?
+   28 | static dac_continuous_handle_t dac_handle = NULL;
+      |        ^~~~~~~~~~~~~~~~~~~~~~~
+      |        adc_continuous_clk_src_t
+/workspace/phase1_audio_test/main/phase1_audio_test.c:28:45: error: initialization of 'int' from 'void *' makes integer from pointer without a cast [-Wint-conversion]
+   28 | static dac_continuous_handle_t dac_handle = NULL;
+      |                                             ^~~~
+/workspace/phase1_audio_test/main/phase1_audio_test.c: In function 'init_dac_output':
+/workspace/phase1_audio_test/main/phase1_audio_test.c:122:5: error: unknown type name 'dac_continuous_config_t'; did you mean 'adc_continuous_clk_src_t'?
+  122 |     dac_continuous_config_t dac_cfg = {
+      |     ^~~~~~~~~~~~~~~~~~~~~~~
+      |     adc_continuous_clk_src_t
+/workspace/phase1_audio_test/main/phase1_audio_test.c:123:9: error: field name not in record or union initializer
+  123 |         .chan_mask = DAC_CHANNEL_MASK_CH0,  // ESP32-S3: DAC_CHAN_0 = GPIO17
+      |         ^
+/workspace/phase1_audio_test/main/phase1_audio_test.c:123:9: note: (near initialization for 'dac_cfg')
+/workspace/phase1_audio_test/main/phase1_audio_test.c:123:22: error: 'DAC_CHANNEL_MASK_CH0' undeclared (first use in this function)
+  123 |         .chan_mask = DAC_CHANNEL_MASK_CH0,  // ESP32-S3: DAC_CHAN_0 = GPIO17
+      |                      ^~~~~~~~~~~~~~~~~~~~
+/workspace/phase1_audio_test/main/phase1_audio_test.c:123:22: note: each undeclared identifier is reported only once for each function it appears in
+/workspace/phase1_audio_test/main/phase1_audio_test.c:124:9: error: field name not in record or union initializer
+  124 |         .desc_num = 4,
+      |         ^
+/workspace/phase1_audio_test/main/phase1_audio_test.c:124:9: note: (near initialization for 'dac_cfg')
+/workspace/phase1_audio_test/main/phase1_audio_test.c:124:21: warning: excess elements in scalar initializer
+  124 |         .desc_num = 4,
+      |                     ^
+/workspace/phase1_audio_test/main/phase1_audio_test.c:124:21: note: (near initialization for 'dac_cfg')
+/workspace/phase1_audio_test/main/phase1_audio_test.c:125:9: error: field name not in record or union initializer
+  125 |         .buf_size = 2048,
+      |         ^
+/workspace/phase1_audio_test/main/phase1_audio_test.c:125:9: note: (near initialization for 'dac_cfg')
+/workspace/phase1_audio_test/main/phase1_audio_test.c:125:21: warning: excess elements in scalar initializer
+  125 |         .buf_size = 2048,
+      |                     ^~~~
+/workspace/phase1_audio_test/main/phase1_audio_test.c:125:21: note: (near initialization for 'dac_cfg')
+/workspace/phase1_audio_test/main/phase1_audio_test.c:126:9: error: field name not in record or union initializer
+  126 |         .freq_hz = SAMPLE_RATE,
+      |         ^
+/workspace/phase1_audio_test/main/phase1_audio_test.c:126:9: note: (near initialization for 'dac_cfg')
+/workspace/phase1_audio_test/main/phase1_audio_test.c:15:29: warning: excess elements in scalar initializer
+   15 | #define SAMPLE_RATE         16000
+      |                             ^~~~~
+/workspace/phase1_audio_test/main/phase1_audio_test.c:126:20: note: in expansion of macro 'SAMPLE_RATE'
+  126 |         .freq_hz = SAMPLE_RATE,
+      |                    ^~~~~~~~~~~
+/workspace/phase1_audio_test/main/phase1_audio_test.c:15:29: note: (near initialization for 'dac_cfg')
+   15 | #define SAMPLE_RATE         16000
+      |                             ^~~~~
+/workspace/phase1_audio_test/main/phase1_audio_test.c:126:20: note: in expansion of macro 'SAMPLE_RATE'
+  126 |         .freq_hz = SAMPLE_RATE,
+      |                    ^~~~~~~~~~~
+/workspace/phase1_audio_test/main/phase1_audio_test.c:127:9: error: field name not in record or union initializer
+  127 |         .offset = 0,
+      |         ^
+/workspace/phase1_audio_test/main/phase1_audio_test.c:127:9: note: (near initialization for 'dac_cfg')
+/workspace/phase1_audio_test/main/phase1_audio_test.c:127:19: warning: excess elements in scalar initializer
+  127 |         .offset = 0,
+      |                   ^
+/workspace/phase1_audio_test/main/phase1_audio_test.c:127:19: note: (near initialization for 'dac_cfg')
+/workspace/phase1_audio_test/main/phase1_audio_test.c:128:9: error: field name not in record or union initializer
+  128 |         .clk_src = DAC_DIGI_CLK_SRC_DEFAULT,
+      |         ^
+/workspace/phase1_audio_test/main/phase1_audio_test.c:128:9: note: (near initialization for 'dac_cfg')
+/workspace/phase1_audio_test/main/phase1_audio_test.c:128:20: error: 'DAC_DIGI_CLK_SRC_DEFAULT' undeclared (first use in this function); did you mean 'ADC_DIGI_CLK_SRC_DEFAULT'?
+  128 |         .clk_src = DAC_DIGI_CLK_SRC_DEFAULT,
+      |                    ^~~~~~~~~~~~~~~~~~~~~~~~
+      |                    ADC_DIGI_CLK_SRC_DEFAULT
+/workspace/phase1_audio_test/main/phase1_audio_test.c:128:20: warning: excess elements in scalar initializer
+/workspace/phase1_audio_test/main/phase1_audio_test.c:128:20: note: (near initialization for 'dac_cfg')
+/workspace/phase1_audio_test/main/phase1_audio_test.c:129:9: error: field name not in record or union initializer
+  129 |         .chan_mode = DAC_CHANNEL_MODE_ALTER,
+      |         ^
+/workspace/phase1_audio_test/main/phase1_audio_test.c:129:9: note: (near initialization for 'dac_cfg')
+/workspace/phase1_audio_test/main/phase1_audio_test.c:129:22: error: 'DAC_CHANNEL_MODE_ALTER' undeclared (first use in this function)
+  129 |         .chan_mode = DAC_CHANNEL_MODE_ALTER,
+      |                      ^~~~~~~~~~~~~~~~~~~~~~
+/workspace/phase1_audio_test/main/phase1_audio_test.c:129:22: warning: excess elements in scalar initializer
+/workspace/phase1_audio_test/main/phase1_audio_test.c:129:22: note: (near initialization for 'dac_cfg')
+/workspace/phase1_audio_test/main/phase1_audio_test.c:132:21: error: implicit declaration of function 'dac_continuous_new_channels' [-Wimplicit-function-declaration]
+  132 |     esp_err_t ret = dac_continuous_new_channels(&dac_cfg, &dac_handle);
+      |                     ^~~~~~~~~~~~~~~~~~~~~~~~~~~
+/workspace/phase1_audio_test/main/phase1_audio_test.c:138:11: error: implicit declaration of function 'dac_continuous_enable' [-Wimplicit-function-declaration]
+  138 |     ret = dac_continuous_enable(dac_handle);
+      |           ^~~~~~~~~~~~~~~~~~~~~
+/workspace/phase1_audio_test/main/phase1_audio_test.c: In function 'simple_audio_loop':
+/workspace/phase1_audio_test/main/phase1_audio_test.c:207:9: error: implicit declaration of function 'dac_continuous_write' [-Wimplicit-function-declaration]
+  207 |         dac_continuous_write(dac_handle, dac_output_buffer, output_samples, &bytes_written, 100);
+      |         ^~~~~~~~~~~~~~~~~~~~
+ninja: build stopped: subcommand failed.

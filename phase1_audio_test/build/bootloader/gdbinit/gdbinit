@@ -1,0 +1,2 @@
+source /workspace/phase1_audio_test/build/bootloader/gdbinit/symbols
+source /workspace/phase1_audio_test/build/bootloader/gdbinit/connect

@@ -129,6 +129,7 @@ The application uses a **single Docker container** with PM2 process management f
 - **I2S Audio Processing**: 32-bit stereo audio capture and PWM speaker output
 - **Wake Word Detection**: Future integration with ESP-Skainet for always-on voice activation
 - **Edge Processing**: Local audio preprocessing before sending to main voice agent system
+- **WebSocket Integration**: Connects to voice agent via `ws://[IP]:3000/api/audio/realtime` (see `hardware/esp32-s3/README.md` for setup)
 
 ## New Features ✨
 
@@ -471,6 +472,24 @@ npm run dev
 
 # Sync financial data from Monarch Money
 cd mcp-servers/finance-mcp && MONARCH_TOKEN=your_token npx tsx src/MonarchSync.ts
+```
+
+### ESP32-S3 Hardware Development
+
+For full-stack development with ESP32-S3 hardware:
+
+```bash
+# 1. Start voice agent (WebSocket server)
+npm run dev  # or docker compose -f docker-compose.dev.yml up -d
+
+# 2. Configure and flash ESP32-S3
+cd hardware/esp32-s3/
+# See hardware/esp32-s3/README.md for complete setup instructions
+
+# 3. Development cycle
+# - Edit ESP32 firmware → rebuild → flash
+# - Edit voice agent → auto-reload
+# - Test full audio pipeline: ESP32 → Voice Agent → LLM → TTS → ESP32
 ```
 
 ### Production (Without Docker)

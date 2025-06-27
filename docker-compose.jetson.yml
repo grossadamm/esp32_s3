@@ -17,9 +17,9 @@ services:
       - NVIDIA_VISIBLE_DEVICES=all
       - CUDA_VISIBLE_DEVICES=all
       - MCP_CONFIG_PATH=/app/mcp-config.json
-    # Remove external port exposure - nginx will proxy
-    expose:
-      - "3000"
+    # Expose port 3000 for ESP32-S3 development (non-SSL WebSocket)
+    ports:
+      - "3000:3000"
     # GPU access for Jetson
     deploy:
       resources:
@@ -40,8 +40,8 @@ services:
   nginx-ssl:
     image: nginx:latest
     ports:
-      - "80:80"    # HTTP (redirects to HTTPS)
-      - "443:443"  # HTTPS
+      - "80:80" # HTTP (redirects to HTTPS)
+      - "443:443" # HTTPS
     volumes:
       - ./ssl:/etc/nginx/ssl
       - ./nginx.conf:/etc/nginx/nginx.conf:ro

@@ -23,7 +23,7 @@ static const char *TAG = "PHASE1_AUDIO_WS";
 #define WIFI_PASSWORD "hurricane"
 
 // WebSocket Configuration - UPDATE THIS
-#define WEBSOCKET_URI "ws://192.168.1.126:8080/audio"
+#define WEBSOCKET_URI "ws://192.168.1.108:3000/api/audio/realtime"
 
 // Audio Configuration
 #define SAMPLE_RATE 16000

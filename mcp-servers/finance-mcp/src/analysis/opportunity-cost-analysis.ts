@@ -40,7 +40,7 @@ class OpportunityCostAnalyzer {
   async fetchSP500Data(): Promise<void> {
     console.log('📈 Fetching S&P 500 historical data...');
     
-    const API_KEY = 'H7NU47N5NIPL94NY';
+    const API_KEY = process.env.ALPHA_VANTAGE_API_KEY || 'H7NU47N5NIPL94NY';
     const symbol = 'SPY'; // S&P 500 ETF as proxy
     
     const url = `https://www.alphavantage.co/query?function=TIME_SERIES_DAILY&symbol=${symbol}&outputsize=full&apikey=${API_KEY}`;

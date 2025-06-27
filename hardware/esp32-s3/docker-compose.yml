@@ -1,0 +1,14 @@
+version: "3.8"
+
+services:
+  esp32-dev:
+    build: .
+    container_name: esp32-dev-persistent
+    volumes:
+      - ./phase1_audio_test:/project
+      - /dev:/dev # For USB device access
+    privileged: true # Needed for USB device access
+    stdin_open: true
+    tty: true
+    working_dir: /project
+    command: /bin/bash -c "while true; do sleep 3600; done" # Keep container alive

@@ -99,7 +99,7 @@ class StockPriceImporter {
     console.log('📈 Fetching Netflix historical data from Alpha Vantage...');
     
     // Get free API key from Alpha Vantage
-    const API_KEY = 'H7NU47N5NIPL94NY';
+    const API_KEY = process.env.ALPHA_VANTAGE_API_KEY || 'H7NU47N5NIPL94NY';
     const symbol = 'NFLX';
     
     // Fetch full historical data (20+ years)

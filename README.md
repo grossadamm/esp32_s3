@@ -6,6 +6,12 @@ A voice-controlled AI agent with MCP (Model Context Protocol) tool integration f
 
 ```
 mcp-voice-agent/
+├── hardware/                       # Hardware components
+│   └── esp32-s3/                   # ESP32-S3 audio processing board
+│       ├── phase1_audio_test/      # ESP32-S3 firmware
+│       ├── dev.sh                  # Development scripts
+│       ├── docker-compose.yml      # ESP32-S3 Docker setup
+│       └── README.md               # Hardware documentation
 ├── voice-agent/                    # Main voice agent application
 │   ├── src/
 │   │   ├── services/
@@ -117,6 +123,12 @@ The application uses a **single Docker container** with PM2 process management f
 - **Project State**: Track current active project across sessions
 - **SQLite Storage**: Persistent project data with timestamps
 - **Tool Integration**: All project operations available through voice agent
+
+### Hardware Components
+- **ESP32-S3 Audio Board** (`hardware/esp32-s3/`): Edge audio processing with dual INMP441 microphones and PWM audio output for local wake word detection and audio preprocessing
+- **I2S Audio Processing**: 32-bit stereo audio capture and PWM speaker output
+- **Wake Word Detection**: Future integration with ESP-Skainet for always-on voice activation
+- **Edge Processing**: Local audio preprocessing before sending to main voice agent system
 
 ## New Features ✨
 

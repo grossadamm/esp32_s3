@@ -60,6 +60,7 @@ uploads/
 */uploads/
 
 # Database files (keep structure files)
+*.db
 *.db-wal
 *.db-shm
 

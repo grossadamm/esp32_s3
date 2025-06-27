@@ -33,7 +33,7 @@ interface StockPriceData {
 // Shared service class for business logic
 export class FinanceService {
   private db: DatabaseWrapper;
-  private readonly API_KEY = 'H7NU47N5NIPL94NY'; // Alpha Vantage API key
+  private readonly API_KEY = process.env.ALPHA_VANTAGE_API_KEY || 'H7NU47N5NIPL94NY'; // Alpha Vantage API key
 
   constructor() {
     // Database path for Docker container (/app/data/finance.db)

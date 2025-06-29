@@ -88,3 +88,4 @@ docker-compose.override.yml
 
 # Existing ignores (preserved)
 data/Your Orders/
+/esp-idf/
